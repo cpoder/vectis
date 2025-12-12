@@ -1,0 +1,15 @@
+{
+  "name": "pesit-docs",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Documentation site for PeSIT solution",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "playwright": "^1.57.0",
+    "vitepress": "^1.3.4"
+  }
+}

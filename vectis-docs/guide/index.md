@@ -1,0 +1,38 @@
+# Qu'est-ce que Vectis ?
+
+**Vectis** (Protocole d'Échange pour un Système Interbancaire de Télécompensation) est un protocole de transfert de fichiers développé par le secteur bancaire français dans les années 1980.
+
+## Historique
+
+Le protocole a été créé par le **GSIT** (Groupement pour un Système Interbancaire de Télécompensation) pour permettre les échanges de fichiers entre banques et avec leurs clients entreprises.
+
+## Caractéristiques
+
+- **Fiabilité** : Mécanismes de reprise sur erreur, points de synchronisation
+- **Sécurité** : Authentification des partenaires, chiffrement (Vectis-E sur TLS)
+- **Traçabilité** : Historique complet des transferts
+- **Interopérabilité** : Standard reconnu par toutes les banques françaises
+
+## Versions
+
+| Version | Transport | Sécurité |
+|---------|-----------|----------|
+| Vectis D | TCP/IP | Authentification simple |
+| Vectis E | TCP/IP + TLS | Chiffrement, certificats |
+
+## Qui utilise Vectis ?
+
+- **Banques** : BNP Paribas, Société Générale, BPCE, Crédit Agricole...
+- **Entreprises** : Pour automatiser les échanges de fichiers bancaires
+- **Éditeurs** : Intégration dans les ERP et logiciels comptables
+- **Prestataires** : Centres de traitement, PSP
+
+## Notre solution
+
+**Vectis Cloud** implémente le protocole Vectis dans une architecture moderne :
+
+- **Client Vectis** : Pour envoyer/recevoir des fichiers vers les banques
+- **Serveur Vectis** : Pour recevoir des fichiers de partenaires
+- **Console d'administration** : Pour gérer l'ensemble
+
+[Démarrer rapidement →](/guide/quickstart)

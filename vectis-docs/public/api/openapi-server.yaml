@@ -1,0 +1,530 @@
+openapi: 3.0.3
+info:
+  title: PeSIT Server API
+  description: API de configuration du serveur PeSIT
+  version: 1.0.0
+  contact:
+    email: contact@pesit.cloud
+
+servers:
+  - url: http://localhost:8080
+    description: Serveur local
+
+security:
+  - basicAuth: []
+
+tags:
+  - name: Servers
+    description: Gestion des serveurs PeSIT
+  - name: Partners
+    description: Gestion des partenaires
+  - name: Virtual Files
+    description: Gestion des fichiers virtuels
+  - name: Cluster
+    description: État du cluster
+  - name: Transfers
+    description: Historique des transferts
+
+paths:
+  /api/servers:
+    get:
+      tags: [Servers]
+      summary: Liste des serveurs PeSIT
+      responses:
+        '200':
+          description: Liste des serveurs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PesitServer'
+    post:
+      tags: [Servers]
+      summary: Créer un serveur PeSIT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesitServerCreate'
+      responses:
+        '201':
+          description: Serveur créé
+
+  /api/servers/{serverId}/start:
+    post:
+      tags: [Servers]
+      summary: Démarrer un serveur
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Serveur démarré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerAction'
+
+  /api/servers/{serverId}/stop:
+    post:
+      tags: [Servers]
+      summary: Arrêter un serveur
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Serveur arrêté
+
+  /api/servers/{serverId}/status:
+    get:
+      tags: [Servers]
+      summary: Statut d'un serveur
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Statut du serveur
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerStatus'
+
+  /api/partners:
+    get:
+      tags: [Partners]
+      summary: Liste des partenaires
+      responses:
+        '200':
+          description: Liste des partenaires
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Partner'
+    post:
+      tags: [Partners]
+      summary: Créer un partenaire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerCreate'
+      responses:
+        '201':
+          description: Partenaire créé
+
+  /api/partners/{partnerId}:
+    parameters:
+      - name: partnerId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Partners]
+      summary: Détail d'un partenaire
+      responses:
+        '200':
+          description: Détail du partenaire
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Partner'
+    put:
+      tags: [Partners]
+      summary: Modifier un partenaire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PartnerUpdate'
+      responses:
+        '200':
+          description: Partenaire modifié
+    delete:
+      tags: [Partners]
+      summary: Supprimer un partenaire
+      responses:
+        '204':
+          description: Partenaire supprimé
+
+  /api/partners/{partnerId}/password:
+    post:
+      tags: [Partners]
+      summary: Changer le mot de passe
+      parameters:
+        - name: partnerId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Mot de passe changé
+
+  /api/virtual-files:
+    get:
+      tags: [Virtual Files]
+      summary: Liste des fichiers virtuels
+      responses:
+        '200':
+          description: Liste des fichiers virtuels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VirtualFile'
+    post:
+      tags: [Virtual Files]
+      summary: Créer un fichier virtuel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VirtualFileCreate'
+      responses:
+        '201':
+          description: Fichier virtuel créé
+
+  /api/virtual-files/{fileId}:
+    parameters:
+      - name: fileId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Virtual Files]
+      summary: Détail d'un fichier virtuel
+      responses:
+        '200':
+          description: Détail du fichier virtuel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualFile'
+    put:
+      tags: [Virtual Files]
+      summary: Modifier un fichier virtuel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VirtualFileUpdate'
+      responses:
+        '200':
+          description: Fichier virtuel modifié
+    delete:
+      tags: [Virtual Files]
+      summary: Supprimer un fichier virtuel
+      responses:
+        '204':
+          description: Fichier virtuel supprimé
+
+  /api/cluster/status:
+    get:
+      tags: [Cluster]
+      summary: Statut du cluster
+      responses:
+        '200':
+          description: Statut du cluster
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClusterStatus'
+
+  /api/transfers:
+    get:
+      tags: [Transfers]
+      summary: Historique des transferts
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: partnerId
+          in: query
+          schema:
+            type: string
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [SEND, RECEIVE]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [COMPLETED, FAILED]
+      responses:
+        '200':
+          description: Liste des transferts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferPage'
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    PesitServer:
+      type: object
+      properties:
+        serverId:
+          type: string
+        port:
+          type: integer
+        status:
+          type: string
+          enum: [RUNNING, STOPPED]
+        autoStart:
+          type: boolean
+        activeConnections:
+          type: integer
+
+    PesitServerCreate:
+      type: object
+      required:
+        - serverId
+        - port
+      properties:
+        serverId:
+          type: string
+        port:
+          type: integer
+        autoStart:
+          type: boolean
+          default: true
+        maxConnections:
+          type: integer
+          default: 100
+        readTimeout:
+          type: integer
+          default: 60000
+
+    ServerAction:
+      type: object
+      properties:
+        serverId:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+
+    ServerStatus:
+      type: object
+      properties:
+        serverId:
+          type: string
+        status:
+          type: string
+        port:
+          type: integer
+        activeConnections:
+          type: integer
+        totalTransfers:
+          type: integer
+        uptime:
+          type: integer
+
+    Partner:
+      type: object
+      properties:
+        partnerId:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        allowedOperations:
+          type: array
+          items:
+            type: string
+            enum: [READ, WRITE]
+        lastConnection:
+          type: string
+          format: date-time
+        transferCount:
+          type: integer
+
+    PartnerCreate:
+      type: object
+      required:
+        - partnerId
+        - name
+      properties:
+        partnerId:
+          type: string
+        name:
+          type: string
+        password:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+        allowedOperations:
+          type: array
+          items:
+            type: string
+            enum: [READ, WRITE]
+          default: [READ, WRITE]
+
+    PartnerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        allowedOperations:
+          type: array
+          items:
+            type: string
+
+    VirtualFile:
+      type: object
+      properties:
+        fileId:
+          type: string
+        name:
+          type: string
+        sendDirectory:
+          type: string
+        receiveDirectory:
+          type: string
+        filenamePattern:
+          type: string
+
+    VirtualFileCreate:
+      type: object
+      required:
+        - fileId
+        - name
+      properties:
+        fileId:
+          type: string
+        name:
+          type: string
+        sendDirectory:
+          type: string
+        receiveDirectory:
+          type: string
+        filenamePattern:
+          type: string
+
+    VirtualFileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        sendDirectory:
+          type: string
+        receiveDirectory:
+          type: string
+        filenamePattern:
+          type: string
+
+    ClusterStatus:
+      type: object
+      properties:
+        clusterName:
+          type: string
+        isLeader:
+          type: boolean
+        nodeName:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClusterMember'
+        memberCount:
+          type: integer
+
+    ClusterMember:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        isLeader:
+          type: boolean
+
+    TransferPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+
+    Transfer:
+      type: object
+      properties:
+        id:
+          type: integer
+        partnerId:
+          type: string
+        direction:
+          type: string
+          enum: [SEND, RECEIVE]
+        filename:
+          type: string
+        virtualFileId:
+          type: string
+        size:
+          type: integer
+        status:
+          type: string
+          enum: [COMPLETED, FAILED]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
