@@ -315,9 +315,9 @@ run_file_transfer_test() {
     PF_PID=$!
     sleep 3
     
-    # Run the integration test from vectis-protocol
+    # Run the integration test from vectis-pesit
     log_info "Running PeSIT file transfer test..."
-    cd "$PROJECT_DIR/../vectis-protocol"
+    cd "$PROJECT_DIR/../vectis-pesit"
     
     if mvn test -Dtest=CompleteFileTransferTest \
         -Dpesit.integration.enabled=true \

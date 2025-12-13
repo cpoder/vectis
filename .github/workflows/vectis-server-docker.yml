@@ -30,9 +30,9 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and install vectis-protocol
+      - name: Build and install vectis-pesit
         run: mvn -B install -DskipTests
-        working-directory: vectis-protocol
+        working-directory: vectis-pesit
 
       - name: Build and install vectis-client
         run: mvn -B install -DskipTests

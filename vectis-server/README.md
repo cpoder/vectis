@@ -21,7 +21,7 @@ Serveur Vectis implémentant le protocole PeSIT (Protocole d'Échange pour un Sy
 
 ```bash
 # Installer d'abord la bibliothèque protocole
-cd ../vectis-protocol
+cd ../vectis-pesit
 mvn install -DskipTests
 
 # Builder le serveur

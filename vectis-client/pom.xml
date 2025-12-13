@@ -39,7 +39,7 @@
         <!-- Vectis Protocol Library -->
         <dependency>
             <groupId>com.vectis</groupId>
-            <artifactId>vectis-protocol</artifactId>
+            <artifactId>vectis-pesit</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
