@@ -2,48 +2,46 @@
 layout: home
 
 hero:
-  name: Vectis Cloud
-  text: Transferts bancaires simplifiés
-  tagline: Automatisez vos échanges de fichiers avec vos banques. Sans vous ruiner.
+  name: Vectis
+  text: Transferts bancaires PeSIT
+  tagline: Solution open source pour automatiser vos échanges de fichiers avec les banques.
   actions:
     - theme: brand
       text: Démarrer
       link: /guide/quickstart
     - theme: alt
-      text: Voir les tarifs
-      link: /pricing
+      text: GitHub
+      link: https://github.com/cpoder/vectis
 
 features:
-  - icon: 💰
-    title: 10x moins cher
-    details: À partir de 199€/mois, soit 10 fois moins cher que les solutions traditionnelles (Axway, IBM).
+  - icon: 📡
+    title: Protocole PeSIT
+    details: Implémentation complète du protocole PeSIT D et E pour les échanges bancaires.
   - icon: ⚡
-    title: Déploiement en 24h
-    details: Interface web moderne, configuration simple. Pas besoin d'expert PeSIT pour démarrer.
+    title: Simple à déployer
+    details: Configuration simple, documentation complète. Pas besoin d'expert PeSIT.
   - icon: 🔌
     title: API REST
-    details: Intégrez facilement vos ERP et logiciels comptables via notre API REST documentée.
-  - icon: ☁️
-    title: Cloud ou On-Premise
-    details: Déployez en SaaS ou sur votre infrastructure. Kubernetes-native.
+    details: Intégrez facilement vos ERP et logiciels comptables via notre API REST.
+  - icon: 🐳
+    title: Docker Ready
+    details: Images Docker disponibles pour un déploiement rapide.
   - icon: 🔒
     title: Sécurisé
     details: TLS 1.3, authentification par certificat, chiffrement de bout en bout.
-  - icon: 📊
-    title: Monitoring temps réel
-    details: Suivez vos transferts en temps réel, alertes, historique complet.
+  - icon: 📖
+    title: Open Source
+    details: Licence Apache 2.0. Code source disponible sur GitHub.
 ---
 
-## Pourquoi Vectis Cloud ?
+## Pourquoi Vectis ?
 
 Le protocole **PeSIT** (Protocole d'Échange pour un Système Interbancaire de Télécompensation) est le standard utilisé par les banques françaises pour les échanges de fichiers sécurisés.
 
-Jusqu'à présent, les solutions PeSIT étaient réservées aux grandes entreprises en raison de leur coût prohibitif (plusieurs milliers d'euros par mois) et de leur complexité.
-
-**Vectis Cloud** change la donne en proposant une solution :
-- **Accessible** : tarifs adaptés aux PME/ETI
-- **Simple** : interface web intuitive, pas de ligne de commande
-- **Moderne** : architecture cloud-native, API REST, intégrations
+**Vectis** est une implémentation open source moderne du protocole PeSIT :
+- **Gratuit** : licence Apache 2.0
+- **Simple** : documentation complète, API REST
+- **Moderne** : Java 21, Spring Boot, Docker
 
 ## Cas d'usage
 
@@ -56,20 +54,20 @@ Récupérez automatiquement vos relevés de compte chaque matin pour les intégr
 ### Centralisation multi-banques
 Gérez tous vos échanges avec plusieurs banques depuis une seule interface.
 
-## Open Source + Enterprise
+## Composants
 
-Vectis adopte le modèle **Open Core** :
-
-- **Community** (gratuit) : Serveur mono-instance, client, protocole — open source Apache 2.0
-- **Pro** : Clustering HA, console d'administration, support — à partir de 199€/mois
-
-> "Le cœur est open source, auditable. Les fonctionnalités entreprise sont payantes mais accessibles."
+| Module | Description |
+|--------|-------------|
+| **vectis-server** | Serveur PeSIT complet |
+| **vectis-client** | Client Java pour envoyer/recevoir des fichiers |
+| **vectis-client-ui** | Interface graphique pour le client |
+| **vectis-pesit** | Bibliothèque d'implémentation du protocole |
 
 ---
 
 <div style="text-align: center; margin-top: 2rem;">
   <a href="/guide/quickstart" style="display: inline-block; padding: 12px 24px; background: #3451b2; color: white; border-radius: 8px; text-decoration: none; font-weight: 500; margin-right: 1rem;">
-    Essayer gratuitement
+    Documentation
   </a>
   <a href="https://github.com/cpoder/vectis" style="display: inline-block; padding: 12px 24px; background: #24292e; color: white; border-radius: 8px; text-decoration: none; font-weight: 500;">
     GitHub
