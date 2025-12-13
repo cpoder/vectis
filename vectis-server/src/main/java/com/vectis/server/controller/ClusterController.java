@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.vectis.server.cluster.ClusterService;
+import com.vectis.server.cluster.ClusterProvider;
 import com.vectis.server.dto.ClusterStatusResponse;
 
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class ClusterController {
 
-    private final ClusterService clusterService;
+    private final ClusterProvider clusterProvider;
 
     /**
      * Get cluster status
@@ -30,13 +30,13 @@ public class ClusterController {
     @GetMapping("/status")
     public ClusterStatusResponse getClusterStatus() {
         ClusterStatusResponse response = new ClusterStatusResponse();
-        response.setClusterEnabled(clusterService.isClusterEnabled());
-        response.setNodeName(clusterService.getNodeName());
-        response.setLeader(clusterService.isLeader());
-        response.setConnected(clusterService.isConnected());
-        response.setClusterSize(clusterService.getClusterSize());
-        response.setMembers(clusterService.getClusterMembers());
-        response.setServerOwnership(clusterService.getAllServerOwnership());
+        response.setClusterEnabled(clusterProvider.isClusterEnabled());
+        response.setNodeName(clusterProvider.getNodeName());
+        response.setLeader(clusterProvider.isLeader());
+        response.setConnected(clusterProvider.isConnected());
+        response.setClusterSize(clusterProvider.getClusterSize());
+        response.setMembers(clusterProvider.getClusterMembers());
+        response.setServerOwnership(clusterProvider.getAllServerOwnership());
         return response;
     }
 
@@ -46,9 +46,9 @@ public class ClusterController {
     @GetMapping("/members")
     public ResponseEntity<?> getClusterMembers() {
         return ResponseEntity.ok(Map.of(
-                "members", clusterService.getClusterMembers(),
-                "size", clusterService.getClusterSize(),
-                "leader", clusterService.isLeader()));
+                "members", clusterProvider.getClusterMembers(),
+                "size", clusterProvider.getClusterSize(),
+                "leader", clusterProvider.isLeader()));
     }
 
     /**
@@ -56,7 +56,7 @@ public class ClusterController {
      */
     @GetMapping("/ownership")
     public ResponseEntity<?> getServerOwnership() {
-        return ResponseEntity.ok(clusterService.getAllServerOwnership());
+        return ResponseEntity.ok(clusterProvider.getAllServerOwnership());
     }
 
     /**
@@ -65,7 +65,7 @@ public class ClusterController {
     @GetMapping("/leader")
     public ResponseEntity<?> isLeader() {
         return ResponseEntity.ok(Map.of(
-                "nodeName", clusterService.getNodeName(),
-                "isLeader", clusterService.isLeader()));
+                "nodeName", clusterProvider.getNodeName(),
+                "isLeader", clusterProvider.isLeader()));
     }
 }

@@ -21,7 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class PodLabelService implements ClusterEventListener {
 
-    @Value("${pesit.cluster.enabled:false}")
+    @Value("${vectis.cluster.enabled:false}")
     private boolean clusterEnabled;
 
     @Value("${POD_NAME:}")
@@ -31,7 +31,7 @@ public class PodLabelService implements ClusterEventListener {
     private String namespace;
 
     @Autowired
-    private ClusterService clusterService;
+    private ClusterProvider clusterProvider;
 
     private KubernetesClient kubernetesClient;
     private boolean kubernetesAvailable = false;
@@ -51,11 +51,11 @@ public class PodLabelService implements ClusterEventListener {
         try {
             kubernetesClient = new KubernetesClientBuilder().build();
             kubernetesAvailable = true;
-            clusterService.addListener(this);
+            clusterProvider.addListener(this);
             log.info("Pod label service initialized for pod {} in namespace {}", podName, namespace);
 
             // Check if we're already the leader (in case we missed the event)
-            if (clusterService.isLeader()) {
+            if (clusterProvider.isLeader()) {
                 log.info("Already leader at init time, adding leader label");
                 updateLeaderLabel(true);
             }
@@ -92,9 +92,9 @@ public class PodLabelService implements ClusterEventListener {
             // Use JSON patch to update the label
             String patchJson;
             if (isLeader) {
-                patchJson = "[{\"op\": \"add\", \"path\": \"/metadata/labels/pesit-leader\", \"value\": \"true\"}]";
+                patchJson = "[{\"op\": \"add\", \"path\": \"/metadata/labels/vectis-leader\", \"value\": \"true\"}]";
             } else {
-                patchJson = "[{\"op\": \"remove\", \"path\": \"/metadata/labels/pesit-leader\"}]";
+                patchJson = "[{\"op\": \"remove\", \"path\": \"/metadata/labels/vectis-leader\"}]";
             }
 
             kubernetesClient.pods()

@@ -6,7 +6,7 @@
 #   - postgres: For production with PostgreSQL (multi-tenant)
 #
 # Run with: --spring.profiles.active=postgres
-# Set PESIT_CLUSTER_ID for multi-tenant mode
+# Set VECTIS_CLUSTER_ID for multi-tenant mode
 
 spring:
   application:
@@ -40,9 +40,9 @@ server:
 vectis:
   # Multi-tenant cluster configuration
   cluster:
-    # Cluster ID for multi-tenant mode (set via PESIT_CLUSTER_ID env var)
+    # Cluster ID for multi-tenant mode (set via VECTIS_CLUSTER_ID env var)
     # When set, server uses cluster-specific schema in PostgreSQL
-    id: ${PESIT_CLUSTER_ID:}
+    id: ${VECTIS_CLUSTER_ID:}
     
     # Enable JGroups cluster mode for HA
     enabled: false
@@ -308,8 +308,8 @@ vectis.security:
 vectis.secrets:
   # Encryption key for secrets (Base64 encoded, 32 bytes for AES-256)
   # Generate with: openssl rand -base64 32
-  # For production, set via environment variable: PESIT_SECRETS_ENCRYPTION_KEY
-  # encryption-key: ${PESIT_SECRETS_ENCRYPTION_KEY:}
+  # For production, set via environment variable: VECTIS_SECRETS_ENCRYPTION_KEY
+  # encryption-key: ${VECTIS_SECRETS_ENCRYPTION_KEY:}
 
 # Backup & Recovery
 vectis.backup:

@@ -20,6 +20,7 @@ import org.jgroups.Receiver;
 import org.jgroups.View;
 import org.jgroups.util.Util;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -37,17 +38,18 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Service
-public class ClusterService implements Receiver, Closeable {
+@ConditionalOnProperty(name = "vectis.cluster.enabled", havingValue = "true")
+public class ClusterService implements ClusterProvider, Receiver, Closeable {
 
-    private static final String CLUSTER_NAME = "pesit-cluster";
+    private static final String CLUSTER_NAME = "vectis-cluster";
 
-    @Value("${pesit.cluster.enabled:false}")
+    @Value("${vectis.cluster.enabled:true}")
     private boolean clusterEnabled;
 
-    @Value("${pesit.cluster.node-name:#{T(java.util.UUID).randomUUID().toString().substring(0,8)}}")
+    @Value("${vectis.cluster.node-name:#{T(java.util.UUID).randomUUID().toString().substring(0,8)}}")
     private String nodeName;
 
-    @Value("${pesit.cluster.config:udp.xml}")
+    @Value("${vectis.cluster.config:tcp.xml}")
     private String jgroupsConfig;
 
     private JChannel channel;

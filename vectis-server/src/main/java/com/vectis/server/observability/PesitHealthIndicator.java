@@ -7,7 +7,7 @@ import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
 
-import com.vectis.server.cluster.ClusterService;
+import com.vectis.server.cluster.ClusterProvider;
 import com.vectis.server.service.PesitServerManager;
 
 import lombok.RequiredArgsConstructor;
@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PesitHealthIndicator implements HealthIndicator {
 
-    private final ClusterService clusterService;
+    private final ClusterProvider clusterProvider;
     private final PesitServerManager serverManager;
 
     @Override
@@ -34,10 +34,10 @@ public class PesitHealthIndicator implements HealthIndicator {
         details.put("activeConnections", activeConnections);
 
         // Cluster status
-        boolean clusterEnabled = clusterService.isClusterEnabled();
-        boolean clusterConnected = clusterService.isConnected();
-        int clusterSize = clusterService.getClusterSize();
-        String nodeName = clusterService.getNodeName();
+        boolean clusterEnabled = clusterProvider.isClusterEnabled();
+        boolean clusterConnected = clusterProvider.isConnected();
+        int clusterSize = clusterProvider.getClusterSize();
+        String nodeName = clusterProvider.getNodeName();
         details.put("clusterEnabled", clusterEnabled);
         details.put("clusterConnected", clusterConnected);
         details.put("clusterSize", clusterSize);

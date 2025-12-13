@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.vectis.server.cluster.ClusterEvent;
 import com.vectis.server.cluster.ClusterEventListener;
-import com.vectis.server.cluster.ClusterService;
+import com.vectis.server.cluster.ClusterProvider;
 import com.vectis.server.config.PesitServerProperties;
 import com.vectis.server.entity.PesitServerConfig;
 import com.vectis.server.entity.PesitServerConfig.ServerStatus;
@@ -38,7 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PesitServerManager implements ClusterEventListener {
 
     private final PesitServerConfigRepository configRepository;
-    private final ClusterService clusterService;
+    private final ClusterProvider clusterProvider;
     private final PesitSessionHandler sessionHandler;
 
     // Map of running server instances: serverId -> PesitServerInstance
@@ -47,15 +47,15 @@ public class PesitServerManager implements ClusterEventListener {
     @PostConstruct
     public void init() {
         // Register as cluster event listener to handle leader changes
-        clusterService.addListener(this);
+        clusterProvider.addListener(this);
 
         // If cluster is not enabled (standalone mode), clusterService.isLeader()
         // returns true immediately
         // In cluster mode, we wait for the BECAME_LEADER event before starting servers
-        if (!clusterService.isClusterEnabled()) {
+        if (!clusterProvider.isClusterEnabled()) {
             log.info("Standalone mode - auto-starting servers");
             autoStartServers();
-        } else if (clusterService.isLeader()) {
+        } else if (clusterProvider.isLeader()) {
             // Already leader at init time (we missed the event)
             log.info("Already cluster leader at init time - auto-starting servers");
             autoStartServers();
@@ -201,8 +201,8 @@ public class PesitServerManager implements ClusterEventListener {
         }
 
         // In cluster mode, try to acquire ownership
-        if (!clusterService.acquireServerOwnership(serverId)) {
-            String owner = clusterService.getServerOwner(serverId);
+        if (!clusterProvider.acquireServerOwnership(serverId)) {
+            String owner = clusterProvider.getServerOwner(serverId);
             throw new IllegalStateException("Server '" + serverId + "' is already running on node '" + owner + "'");
         }
 
@@ -254,7 +254,7 @@ public class PesitServerManager implements ClusterEventListener {
             runningServers.remove(serverId);
 
             // Release cluster ownership
-            clusterService.releaseServerOwnership(serverId);
+            clusterProvider.releaseServerOwnership(serverId);
 
             config.setStatus(ServerStatus.STOPPED);
             config.setLastStoppedAt(Instant.now());
