@@ -1,0 +1,124 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # Build all Maven modules in dependency order
+      - name: Build vectis-pesit
+        run: mvn -B install -DskipTests
+        working-directory: vectis-pesit
+
+      - name: Build vectis-connector-api
+        run: mvn -B install -DskipTests
+        working-directory: vectis-connector-api
+
+      - name: Build vectis-client
+        run: mvn -B package -DskipTests
+        working-directory: vectis-client
+
+      - name: Build vectis-server
+        run: mvn -B package -DskipTests
+        working-directory: vectis-server
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push vectis-client image
+      - name: Extract metadata for vectis-client
+        id: meta-client
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/vectis-client
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push vectis-client
+        uses: docker/build-push-action@v5
+        with:
+          context: ./vectis-client
+          file: ./vectis-client/Dockerfile
+          push: true
+          tags: ${{ steps.meta-client.outputs.tags }}
+          labels: ${{ steps.meta-client.outputs.labels }}
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,mode=max,scope=client
+
+      # Build and push vectis-client-ui image
+      - name: Extract metadata for vectis-client-ui
+        id: meta-client-ui
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/vectis-client-ui
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push vectis-client-ui
+        uses: docker/build-push-action@v5
+        with:
+          context: ./vectis-client-ui
+          file: ./vectis-client-ui/Dockerfile
+          push: true
+          tags: ${{ steps.meta-client-ui.outputs.tags }}
+          labels: ${{ steps.meta-client-ui.outputs.labels }}
+          cache-from: type=gha,scope=client-ui
+          cache-to: type=gha,mode=max,scope=client-ui
+
+      # Build and push vectis-server image
+      - name: Extract metadata for vectis-server
+        id: meta-server
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/vectis-server
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push vectis-server
+        uses: docker/build-push-action@v5
+        with:
+          context: ./vectis-server
+          file: ./vectis-server/Dockerfile
+          push: true
+          tags: ${{ steps.meta-server.outputs.tags }}
+          labels: ${{ steps.meta-server.outputs.labels }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
