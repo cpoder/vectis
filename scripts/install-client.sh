@@ -134,11 +134,14 @@ prompt_value() {
     eval "$varname=\"${value:-$default}\""
 }
 
-echo ""
-echo "╔═══════════════════════════════════════════╗"
-echo "║        Vectis Client Installer            ║"
-echo "╚═══════════════════════════════════════════╝"
-echo ""
+# Show banner
+show_banner() {
+    echo ""
+    echo "╔═══════════════════════════════════════════╗"
+    echo "║        Vectis Client Installer            ║"
+    echo "╚═══════════════════════════════════════════╝"
+    echo ""
+}
 
 # Install k3s
 install_k3s() {
@@ -420,6 +423,7 @@ show_access_info() {
 # Main
 main() {
     parse_args "$@"
+    show_banner
     check_prereqs
     setup_namespace
     configure_storage
