@@ -18,14 +18,14 @@ RUN mkdir -p /data && \
 USER pesit
 
 # Expose ports
-# 8081 - REST API
-EXPOSE 8081
+# 8080 - REST API
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget -q --spider http://localhost:8081/actuator/health || exit 1
+    CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
 
 # JVM options for containers
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0"
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar serve"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
