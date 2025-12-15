@@ -99,21 +99,23 @@ is_tty() {
     [ -t 0 ]
 }
 
-# Prompt user for yes/no
+# Prompt user for yes/no (uses /dev/tty for pipe compatibility)
 prompt_yn() {
     local prompt="$1"
     local default="${2:-n}"
     
-    if [ "$INTERACTIVE" = false ] || ! is_tty; then
+    if [ "$INTERACTIVE" = false ]; then
         [ "$default" = "y" ] && return 0 || return 1
     fi
     
     local yn
     if [ "$default" = "y" ]; then
-        read -p "$prompt [Y/n]: " yn
+        echo -n "$prompt [Y/n]: "
+        read yn < /dev/tty 2>/dev/null || yn=""
         yn="${yn:-y}"
     else
-        read -p "$prompt [y/N]: " yn
+        echo -n "$prompt [y/N]: "
+        read yn < /dev/tty 2>/dev/null || yn=""
         yn="${yn:-n}"
     fi
     
@@ -123,20 +125,21 @@ prompt_yn() {
     esac
 }
 
-# Prompt for value with default
+# Prompt for value with default (uses /dev/tty for pipe compatibility)
 prompt_value() {
     local prompt="$1"
     local default="$2"
     local varname="$3"
     
-    if [ "$INTERACTIVE" = false ] || ! is_tty; then
+    if [ "$INTERACTIVE" = false ]; then
         echo -e "$prompt: ${BLUE}$default${NC} (auto)"
         eval "$varname=\"$default\""
         return
     fi
     
+    echo -n "$prompt [$default]: "
     local value
-    read -p "$prompt [$default]: " value
+    read value < /dev/tty 2>/dev/null || value=""
     eval "$varname=\"${value:-$default}\""
 }
 
