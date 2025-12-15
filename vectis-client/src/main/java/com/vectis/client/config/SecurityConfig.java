@@ -46,6 +46,8 @@ public class SecurityConfig {
     @Profile("nosecurity")
     public SecurityFilterChain noSecurityFilterChain(HttpSecurity http) throws Exception {
         http
+                .cors(cors -> {
+                })
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
