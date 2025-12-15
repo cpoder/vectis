@@ -18,18 +18,25 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vectis.client.connector.ConnectorRegistry;
 import com.vectis.client.dto.MessageRequest;
 import com.vectis.client.dto.TransferRequest;
 import com.vectis.client.dto.TransferResponse;
 import com.vectis.client.dto.TransferStats;
 import com.vectis.client.entity.PesitServer;
+import com.vectis.client.entity.StorageConnection;
 import com.vectis.client.entity.TransferConfig;
 import com.vectis.client.entity.TransferHistory;
 import com.vectis.client.entity.TransferHistory.TransferDirection;
 import com.vectis.client.entity.TransferHistory.TransferStatus;
+import com.vectis.client.repository.StorageConnectionRepository;
 import com.vectis.client.repository.TransferConfigRepository;
 import com.vectis.client.repository.TransferHistoryRepository;
 import com.vectis.client.transport.TlsTransportChannel;
+import com.vectis.connector.ConnectorException;
+import com.vectis.connector.StorageConnector;
 import com.vectis.fpdu.Fpdu;
 import com.vectis.fpdu.FpduType;
 import com.vectis.fpdu.ParameterGroupIdentifier;
@@ -57,6 +64,9 @@ public class TransferService {
         private final TransferHistoryRepository historyRepository;
         private final ObservationRegistry observationRegistry;
         private final PathPlaceholderService placeholderService;
+        private final ConnectorRegistry connectorRegistry;
+        private final StorageConnectionRepository connectionRepository;
+        private final ObjectMapper objectMapper;
 
         @Transactional
         public TransferResponse sendFile(TransferRequest request) {
@@ -74,22 +84,43 @@ public class TransferService {
                 PesitServer server = resolveServer(request.getServer());
                 TransferConfig config = resolveConfig(request.getTransferConfig());
 
+                // Use filename if provided, fallback to deprecated localPath for compatibility
+                String filename = request.getFilename() != null ? request.getFilename() : request.getFilename();
+                String sourceConnId = request.getSourceConnectionId();
+
                 TransferHistory history = createHistory(server, config, TransferDirection.SEND,
-                                request.getLocalPath(), request.getRemoteFilename(), request.getPartnerId(),
+                                filename, request.getRemoteFilename(), request.getPartnerId(),
                                 correlationId);
 
                 try {
-                        Path localFile = Path.of(request.getLocalPath());
-                        if (!Files.exists(localFile)) {
-                                throw new IllegalArgumentException("Local file not found: " + request.getLocalPath());
+                        byte[] fileData;
+                        long fileSize;
+
+                        if (sourceConnId != null) {
+                                // Read from storage connector
+                                StorageConnector connector = createConnectorFromConnectionId(sourceConnId);
+                                try (var inputStream = connector.read(filename, 0)) {
+                                        fileData = inputStream.readAllBytes();
+                                        fileSize = fileData.length;
+                                } finally {
+                                        connector.close();
+                                }
+                                log.info("Read {} bytes from connector {} path {}", fileSize, sourceConnId, filename);
+                        } else {
+                                // Read from local filesystem
+                                Path localFile = Path.of(filename);
+                                if (!Files.exists(localFile)) {
+                                        throw new IllegalArgumentException("Local file not found: " + filename);
+                                }
+                                fileData = Files.readAllBytes(localFile);
+                                fileSize = fileData.length;
                         }
 
-                        history.setFileSize(Files.size(localFile));
+                        history.setFileSize(fileSize);
                         history.setStatus(TransferStatus.IN_PROGRESS);
                         history = historyRepository.save(history);
 
                         TransportChannel channel = createChannel(server);
-                        byte[] fileData = Files.readAllBytes(localFile);
 
                         try (PesitSession session = new PesitSession(channel, false)) {
                                 executeSendTransfer(session, server, request, fileData, config);
@@ -127,19 +158,23 @@ public class TransferService {
                 PesitServer server = resolveServer(request.getServer());
                 TransferConfig config = resolveConfig(request.getTransferConfig());
 
-                // Resolve placeholders in local path
-                String resolvedLocalPath = placeholderService.resolvePath(
-                                request.getLocalPath(),
+                // Use filename if provided, fallback to deprecated localPath for compatibility
+                String filename = request.getFilename() != null ? request.getFilename() : request.getFilename();
+                String destConnId = request.getDestinationConnectionId();
+
+                // Resolve placeholders in filename
+                String resolvedFilename = placeholderService.resolvePath(
+                                filename,
                                 PathPlaceholderService.PlaceholderContext.builder()
                                                 .partnerId(request.getPartnerId())
-                                                .virtualFile(request.getRemoteFilename()) // PI 12 - virtual file name
+                                                .virtualFile(request.getRemoteFilename())
                                                 .serverId(server.getId())
                                                 .serverName(server.getName())
                                                 .direction("RECEIVE")
                                                 .build());
 
                 TransferHistory history = createHistory(server, config, TransferDirection.RECEIVE,
-                                resolvedLocalPath, request.getRemoteFilename(), request.getPartnerId(),
+                                resolvedFilename, request.getRemoteFilename(), request.getPartnerId(),
                                 correlationId);
 
                 try {
@@ -149,9 +184,23 @@ public class TransferService {
                         TransportChannel channel = createChannel(server);
 
                         long bytesReceived;
-                        try (PesitSession session = new PesitSession(channel, false)) {
-                                bytesReceived = executeReceiveTransfer(session, server, request,
-                                                Path.of(resolvedLocalPath), config);
+                        if (destConnId != null) {
+                                // Write to storage connector
+                                StorageConnector connector = createConnectorFromConnectionId(destConnId);
+                                try (PesitSession session = new PesitSession(channel, false)) {
+                                        bytesReceived = executeReceiveTransferToConnector(session, server, request,
+                                                        connector, resolvedFilename, config);
+                                } finally {
+                                        connector.close();
+                                }
+                                log.info("Wrote {} bytes to connector {} path {}", bytesReceived, destConnId,
+                                                resolvedFilename);
+                        } else {
+                                // Write to local filesystem
+                                try (PesitSession session = new PesitSession(channel, false)) {
+                                        bytesReceived = executeReceiveTransfer(session, server, request,
+                                                        Path.of(resolvedFilename), config);
+                                }
                         }
 
                         history.setStatus(TransferStatus.COMPLETED);
@@ -269,7 +318,7 @@ public class TransferService {
                                                         TransferRequest request = TransferRequest.builder()
                                                                         .server(original.getServerId())
                                                                         .partnerId(original.getPartnerId())
-                                                                        .localPath(original.getLocalFilename())
+                                                                        .filename(original.getLocalFilename())
                                                                         .remoteFilename(original.getRemoteFilename())
                                                                         .transferConfig(original.getTransferConfigId())
                                                                         .correlationId(UUID.randomUUID().toString())
@@ -280,7 +329,7 @@ public class TransferService {
                                                         TransferRequest request = TransferRequest.builder()
                                                                         .server(original.getServerId())
                                                                         .partnerId(original.getPartnerId())
-                                                                        .localPath(original.getLocalFilename())
+                                                                        .filename(original.getLocalFilename())
                                                                         .remoteFilename(original.getRemoteFilename())
                                                                         .transferConfig(original.getTransferConfigId())
                                                                         .correlationId(UUID.randomUUID().toString())
@@ -345,6 +394,29 @@ public class TransferService {
                 TcpTransportChannel channel = new TcpTransportChannel(server.getHost(), server.getPort());
                 channel.setReceiveTimeout(server.getReadTimeout());
                 return channel;
+        }
+
+        private StorageConnector createConnectorFromConnectionId(String connectionId) {
+                StorageConnection connection = connectionRepository.findById(connectionId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Storage connection not found: " + connectionId));
+
+                if (!connection.isEnabled()) {
+                        throw new IllegalArgumentException("Storage connection is disabled: " + connection.getName());
+                }
+
+                try {
+                        java.util.Map<String, String> config = objectMapper.readValue(
+                                        connection.getConfigJson(),
+                                        new TypeReference<java.util.Map<String, String>>() {
+                                        });
+                        return connectorRegistry.createConnector(connection.getConnectorType(), config);
+                } catch (Exception e) {
+                        throw new IllegalArgumentException(
+                                        "Failed to create connector for connection " + connection.getName() + ": "
+                                                        + e.getMessage(),
+                                        e);
+                }
         }
 
         private TransferHistory createHistory(PesitServer server, TransferConfig config,
@@ -632,6 +704,96 @@ public class TransferService {
                 session.sendFpduWithAck(releaseFpdu);
 
                 log.info("Receive transfer completed: {}", remoteFilename);
+                return totalBytes;
+        }
+
+        private long executeReceiveTransferToConnector(PesitSession session, PesitServer server,
+                        TransferRequest request, StorageConnector connector, String destPath, TransferConfig config)
+                        throws IOException, InterruptedException, ConnectorException {
+                int connectionId = 1;
+                int chunkSize = config.getChunkSize();
+                String remoteFilename = request.getRemoteFilename();
+
+                // CONNECT with read access
+                Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
+                                .withIdSrc(connectionId)
+                                .withParameter(new ParameterValue(PI_03_DEMANDEUR, request.getPartnerId()))
+                                .withParameter(new ParameterValue(PI_04_SERVEUR, server.getServerId()))
+                                .withParameter(new ParameterValue(PI_06_VERSION, 2))
+                                .withParameter(new ParameterValue(PI_22_TYPE_ACCES, 1));
+
+                if (server.getPassword() != null && !server.getPassword().isEmpty()) {
+                        connectFpdu.withParameter(new ParameterValue(PI_05_CONTROLE_ACCES, server.getPassword()));
+                }
+
+                Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
+                int serverConnectionId = aconnect.getIdSrc();
+
+                // SELECT
+                String virtualFile = request.getVirtualFile() != null ? request.getVirtualFile() : remoteFilename;
+                ParameterValue pgi9 = new ParameterValue(
+                                ParameterGroupIdentifier.PGI_09_ID_FICHIER,
+                                new ParameterValue(PI_11_TYPE_FICHIER, 0),
+                                new ParameterValue(PI_12_NOM_FICHIER, virtualFile));
+
+                Fpdu selectFpdu = new Fpdu(FpduType.SELECT)
+                                .withIdDst(serverConnectionId)
+                                .withIdSrc(connectionId)
+                                .withParameter(pgi9)
+                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, 1))
+                                .withParameter(new ParameterValue(PI_17_PRIORITE, config.getPriority()))
+                                .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, chunkSize));
+                session.sendFpduWithAck(selectFpdu);
+
+                // OPEN
+                session.sendFpduWithAck(new Fpdu(FpduType.OPEN).withIdDst(serverConnectionId).withIdSrc(connectionId));
+
+                // READ
+                session.sendFpduWithAck(new Fpdu(FpduType.READ)
+                                .withIdDst(serverConnectionId)
+                                .withIdSrc(connectionId)
+                                .withParameter(new ParameterValue(PI_18_POINT_RELANCE, 0)));
+
+                // Receive DTF chunks and write to connector
+                long totalBytes = 0;
+                int chunkCount = 0;
+                try (OutputStream connectorOut = connector.write(destPath, false)) {
+                        boolean receiving = true;
+                        while (receiving) {
+                                byte[] rawFpdu = session.receiveRawFpdu();
+                                if (rawFpdu.length >= 4) {
+                                        int phase = rawFpdu[2] & 0xFF;
+                                        int type = rawFpdu[3] & 0xFF;
+
+                                        if (phase == 0x00 && (type == 0x00 || type == 0x40 || type == 0x41
+                                                        || type == 0x42)) {
+                                                if (rawFpdu.length > 6) {
+                                                        int dataLen = rawFpdu.length - 6;
+                                                        connectorOut.write(rawFpdu, 6, dataLen);
+                                                        totalBytes += dataLen;
+                                                        chunkCount++;
+                                                }
+                                        } else if (phase == 0xC0 && type == 0x22) {
+                                                receiving = false;
+                                        } else {
+                                                receiving = false;
+                                        }
+                                }
+                        }
+                }
+                log.info("Wrote {} bytes to connector in {} chunks", totalBytes, chunkCount);
+
+                // Cleanup: TRANS_END, CLOSE, DESELECT, RELEASE
+                session.sendFpduWithAck(
+                                new Fpdu(FpduType.TRANS_END).withIdDst(serverConnectionId).withIdSrc(connectionId));
+                session.sendFpduWithAck(new Fpdu(FpduType.CLOSE).withIdDst(serverConnectionId).withIdSrc(connectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 })));
+                session.sendFpduWithAck(new Fpdu(FpduType.DESELECT).withIdDst(serverConnectionId)
+                                .withIdSrc(connectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 })));
+                session.sendFpduWithAck(new Fpdu(FpduType.RELEASE).withIdDst(serverConnectionId).withIdSrc(connectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 })));
+
                 return totalBytes;
         }
 

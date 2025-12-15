@@ -9,6 +9,7 @@ import {
   Star,
   Calendar,
   CalendarDays,
+  Plug,
   Settings,
   Menu,
   X
@@ -20,6 +21,7 @@ const sidebarOpen = ref(true)
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, exact: true },
   { name: 'Servers', href: '/servers', icon: Server, exact: false },
+  { name: 'Connectors', href: '/connectors', icon: Plug, exact: false },
   { name: 'Transfer', href: '/transfer', icon: Send, exact: false },
   { name: 'History', href: '/history', icon: History, exact: false },
   { name: 'Favorites', href: '/favorites', icon: Star, exact: false },

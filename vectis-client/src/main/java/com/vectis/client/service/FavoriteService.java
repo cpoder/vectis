@@ -93,7 +93,9 @@ public class FavoriteService {
                     existing.setServerName(updated.getServerName());
                     existing.setPartnerId(updated.getPartnerId());
                     existing.setDirection(updated.getDirection());
-                    existing.setLocalPath(updated.getLocalPath());
+                    existing.setFilename(updated.getFilename());
+                    existing.setSourceConnectionId(updated.getSourceConnectionId());
+                    existing.setDestinationConnectionId(updated.getDestinationConnectionId());
                     existing.setRemoteFilename(updated.getRemoteFilename());
                     existing.setVirtualFile(updated.getVirtualFile());
                     existing.setTransferConfigId(updated.getTransferConfigId());
@@ -115,12 +117,15 @@ public class FavoriteService {
         List<ScheduledTransfer> linkedSchedules = scheduleRepository.findByFavoriteId(favorite.getId());
         if (!linkedSchedules.isEmpty()) {
             log.info("Updating {} linked schedules for favorite {}", linkedSchedules.size(), favorite.getName());
+            String filename = favorite.getFilename() != null ? favorite.getFilename() : favorite.getLocalPath();
             for (ScheduledTransfer schedule : linkedSchedules) {
                 schedule.setServerId(favorite.getServerId());
                 schedule.setServerName(favorite.getServerName());
                 schedule.setPartnerId(favorite.getPartnerId());
                 schedule.setDirection(favorite.getDirection());
-                schedule.setLocalPath(favorite.getLocalPath());
+                schedule.setFilename(filename);
+                schedule.setSourceConnectionId(favorite.getSourceConnectionId());
+                schedule.setDestinationConnectionId(favorite.getDestinationConnectionId());
                 schedule.setRemoteFilename(favorite.getRemoteFilename());
                 schedule.setVirtualFile(favorite.getVirtualFile());
                 schedule.setTransferConfigId(favorite.getTransferConfigId());
@@ -151,11 +156,14 @@ public class FavoriteService {
                     favorite.markUsed();
                     favoriteRepository.save(favorite);
 
-                    // Build transfer request
+                    // Build transfer request with connector support
+                    String filename = favorite.getFilename() != null ? favorite.getFilename() : favorite.getLocalPath();
                     TransferRequest request = TransferRequest.builder()
                             .server(favorite.getServerId())
                             .partnerId(favorite.getPartnerId())
-                            .localPath(favorite.getLocalPath())
+                            .filename(filename)
+                            .sourceConnectionId(favorite.getSourceConnectionId())
+                            .destinationConnectionId(favorite.getDestinationConnectionId())
                             .remoteFilename(favorite.getRemoteFilename())
                             .virtualFile(favorite.getVirtualFile())
                             .transferConfig(favorite.getTransferConfigId())

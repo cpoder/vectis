@@ -58,10 +58,20 @@ public class FavoriteTransfer {
     @Column(nullable = false)
     private TransferHistory.TransferDirection direction;
 
-    /** Local file path */
+    /** Source storage connection ID (null = local filesystem) */
+    private String sourceConnectionId;
+
+    /** Destination storage connection ID (null = local filesystem) */
+    private String destinationConnectionId;
+
+    /** Filename (relative path on connector, or local path if no connector) */
+    private String filename;
+
+    /** @deprecated Use filename instead */
+    @Deprecated
     private String localPath;
 
-    /** Remote filename */
+    /** Remote filename (virtual file ID) */
     private String remoteFilename;
 
     /** Virtual file name */

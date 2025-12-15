@@ -105,6 +105,18 @@ public class TransferConfig {
     @Builder.Default
     private boolean defaultConfig = false;
 
+    /** Source storage connection ID (null = local filesystem) */
+    private String sourceConnectionId;
+
+    /** Source path pattern on the storage connection */
+    private String sourcePath;
+
+    /** Destination storage connection ID (null = local filesystem) */
+    private String destinationConnectionId;
+
+    /** Destination path pattern on the storage connection */
+    private String destinationPath;
+
     @Column(updatable = false)
     private Instant createdAt;
 

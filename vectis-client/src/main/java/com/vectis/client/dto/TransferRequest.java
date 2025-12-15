@@ -23,11 +23,31 @@ public class TransferRequest {
     @NotBlank(message = "Partner ID is required")
     private String partnerId;
 
-    /** Local file path (for send) or destination path (for receive) */
-    @NotBlank(message = "Local path is required")
+    /**
+     * Source connection ID for reading the file (null = local filesystem).
+     * For SEND: where to read the file from.
+     * For RECEIVE: not used (file comes from PeSIT server).
+     */
+    private String sourceConnectionId;
+
+    /**
+     * Destination connection ID for writing the file (null = local filesystem).
+     * For SEND: not used (file goes to PeSIT server).
+     * For RECEIVE: where to write the received file.
+     */
+    private String destinationConnectionId;
+
+    /** Filename (relative path on the connector, or local path if no connector) */
+    @NotBlank(message = "Filename is required")
+    private String filename;
+
+    /**
+     * @deprecated Use filename instead. Kept for backward compatibility.
+     */
+    @Deprecated
     private String localPath;
 
-    /** Remote filename */
+    /** Remote filename (virtual file ID on PeSIT server) */
     @NotBlank(message = "Remote filename is required")
     private String remoteFilename;
 

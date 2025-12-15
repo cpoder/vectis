@@ -28,11 +28,21 @@ interface Favorite {
   serverName?: string
   partnerId?: string
   direction: 'SEND' | 'RECEIVE'
-  localPath?: string
+  sourceConnectionId?: string
+  destinationConnectionId?: string
+  filename?: string
+  localPath?: string  // deprecated
   remoteFilename?: string
   usageCount: number
   lastUsedAt?: string
   createdAt: string
+}
+
+interface StorageConnection {
+  id: string
+  name: string
+  connectorType: string
+  enabled: boolean
 }
 
 interface ExecutionState {
@@ -73,17 +83,30 @@ const editForm = ref({
   description: '',
   serverId: '',
   partnerId: '',
-  localPath: '',
+  sourceConnectionId: '',
+  destinationConnectionId: '',
+  filename: '',
   remoteFilename: '',
   direction: 'SEND' as 'SEND' | 'RECEIVE'
 })
 const saving = ref(false)
 const servers = ref<any[]>([])
+const connections = ref<StorageConnection[]>([])
 
 onMounted(() => {
   loadFavorites()
   loadServers()
+  loadConnections()
 })
+
+async function loadConnections() {
+  try {
+    const response = await api.get('/connectors/connections')
+    connections.value = (response.data || []).filter((c: StorageConnection) => c.enabled)
+  } catch (e) {
+    console.error('Failed to load connections:', e)
+  }
+}
 
 function getExecutionState(id: string): ExecutionState {
   return executionStates[id] || { status: 'idle' }
@@ -188,7 +211,9 @@ function openEditModal(favorite: Favorite) {
     description: favorite.description || '',
     serverId: favorite.serverId,
     partnerId: favorite.partnerId || '',
-    localPath: favorite.localPath || '',
+    sourceConnectionId: favorite.sourceConnectionId || '',
+    destinationConnectionId: favorite.destinationConnectionId || '',
+    filename: favorite.filename || favorite.localPath || '',
     remoteFilename: favorite.remoteFilename || '',
     direction: favorite.direction
   }
@@ -621,21 +646,56 @@ async function createSchedule() {
               <input v-model="editForm.remoteFilename" type="text" class="input w-full" placeholder="DATA_FILE" required />
             </div>
 
-            <!-- Local Path -->
+            <!-- Storage Connection -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                {{ editForm.direction === 'SEND' ? 'Source Storage' : 'Destination Storage' }}
+              </label>
+              <select 
+                v-if="editForm.direction === 'SEND'"
+                v-model="editForm.sourceConnectionId" 
+                class="input w-full"
+              >
+                <option value="">Local Filesystem</option>
+                <option v-for="conn in connections" :key="conn.id" :value="conn.id">
+                  {{ conn.name }} ({{ conn.connectorType }})
+                </option>
+              </select>
+              <select 
+                v-else
+                v-model="editForm.destinationConnectionId" 
+                class="input w-full"
+              >
+                <option value="">Local Filesystem</option>
+                <option v-for="conn in connections" :key="conn.id" :value="conn.id">
+                  {{ conn.name }} ({{ conn.connectorType }})
+                </option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                {{ editForm.direction === 'SEND' ? 'Where to read the file from' : 'Where to save the received file' }}
+              </p>
+            </div>
+
+            <!-- Filename -->
             <div>
               <template v-if="editForm.direction === 'SEND'">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Source File Path *</label>
-                <input v-model="editForm.localPath" type="text" class="input w-full font-mono" placeholder="/path/to/file.txt" required />
-                <p class="text-xs text-gray-500 mt-1">Full path to the file to send</p>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Filename *</label>
+                <input v-model="editForm.filename" type="text" class="input w-full font-mono" 
+                  :placeholder="editForm.sourceConnectionId ? 'path/to/file.txt' : '/full/path/to/file.txt'" required />
+                <p class="text-xs text-gray-500 mt-1">
+                  {{ editForm.sourceConnectionId ? 'Relative path on the storage' : 'Full local path' }}
+                </p>
               </template>
               <template v-else>
                 <PathPlaceholderInput
-                  v-model="editForm.localPath"
-                  label="Destination Path *"
-                  placeholder="/data/received/${partner}/${virtualFile}_${timestamp}"
+                  v-model="editForm.filename"
+                  label="Filename *"
+                  :placeholder="editForm.destinationConnectionId ? 'received/${file}' : '/data/received/${partner}/${file}'"
                   direction="RECEIVE"
                 />
-                <p class="text-xs text-gray-500 mt-1">Use placeholders for dynamic paths</p>
+                <p class="text-xs text-gray-500 mt-1">
+                  {{ editForm.destinationConnectionId ? 'Path on the storage' : 'Local path (supports placeholders)' }}
+                </p>
               </template>
             </div>
           </div>

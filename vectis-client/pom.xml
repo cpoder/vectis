@@ -43,6 +43,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Vectis Connector API (SDK for storage connectors) -->
+        <dependency>
+            <groupId>com.vectis</groupId>
+            <artifactId>vectis-connector-api</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Spring Boot Web for REST API -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

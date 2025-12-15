@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, Trash2 } from 'lucide-vue-next'
 
 interface Props {
   show: boolean

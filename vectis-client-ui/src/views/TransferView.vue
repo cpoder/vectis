@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { 
   Upload, 
   Download,
@@ -7,12 +7,21 @@ import {
   Server,
   CheckCircle,
   XCircle,
-  Loader2
+  Loader2,
+  Plug
 } from 'lucide-vue-next'
 import api from '@/api'
 import PathPlaceholderInput from '@/components/PathPlaceholderInput.vue'
 
+interface StorageConnection {
+  id: string
+  name: string
+  connectorType: string
+  enabled: boolean
+}
+
 const servers = ref<any[]>([])
+const connections = ref<StorageConnection[]>([])
 const loading = ref(true)
 const transferring = ref(false)
 const result = ref<any>(null)
@@ -22,13 +31,19 @@ const form = ref({
   server: '',
   partnerId: '',
   direction: 'SEND' as 'SEND' | 'RECEIVE',
-  localPath: '',
+  sourceConnectionId: '' as string,  // '' = local filesystem
+  destinationConnectionId: '' as string,  // '' = local filesystem
+  filename: '',
   remoteFilename: ''
 })
 
+const activeConnectionLabel = computed(() => 
+  form.value.direction === 'SEND' ? 'Source Storage' : 'Destination Storage'
+)
+
 
 onMounted(async () => {
-  await loadServers()
+  await Promise.all([loadServers(), loadConnections()])
   loading.value = false
 })
 
@@ -36,7 +51,6 @@ async function loadServers() {
   try {
     const response = await api.get('/servers')
     servers.value = response.data || []
-    // Set default server
     const defaultServer = servers.value.find(s => s.defaultServer)
     if (defaultServer) {
       form.value.server = defaultServer.name
@@ -45,6 +59,15 @@ async function loadServers() {
     }
   } catch (e) {
     console.error('Failed to load servers:', e)
+  }
+}
+
+async function loadConnections() {
+  try {
+    const response = await api.get('/connectors/connections')
+    connections.value = (response.data || []).filter((c: StorageConnection) => c.enabled)
+  } catch (e) {
+    console.error('Failed to load connections:', e)
   }
 }
 
@@ -57,8 +80,8 @@ async function startTransfer() {
     error.value = 'Please enter a partner ID'
     return
   }
-  if (!form.value.localPath) {
-    error.value = 'Please enter a local file path'
+  if (!form.value.filename) {
+    error.value = 'Please enter a filename'
     return
   }
   if (!form.value.remoteFilename) {
@@ -72,12 +95,22 @@ async function startTransfer() {
 
   try {
     const endpoint = form.value.direction === 'SEND' ? '/transfers/send' : '/transfers/receive'
-    const response = await api.post(endpoint, {
+    const payload: Record<string, any> = {
       server: form.value.server,
       partnerId: form.value.partnerId,
-      localPath: form.value.localPath,
+      filename: form.value.filename,
       remoteFilename: form.value.remoteFilename
-    })
+    }
+    
+    // Add connection IDs if selected
+    if (form.value.direction === 'SEND' && form.value.sourceConnectionId) {
+      payload.sourceConnectionId = form.value.sourceConnectionId
+    }
+    if (form.value.direction === 'RECEIVE' && form.value.destinationConnectionId) {
+      payload.destinationConnectionId = form.value.destinationConnectionId
+    }
+    
+    const response = await api.post(endpoint, payload)
     result.value = response.data
   } catch (e: any) {
     error.value = e.response?.data?.message || e.response?.data?.error || 'Transfer failed'
@@ -91,8 +124,10 @@ function resetForm() {
   result.value = null
   error.value = ''
   form.value.partnerId = ''
-  form.value.localPath = ''
+  form.value.filename = ''
   form.value.remoteFilename = ''
+  form.value.sourceConnectionId = ''
+  form.value.destinationConnectionId = ''
 }
 
 function formatBytes(bytes: number) {
@@ -172,27 +207,62 @@ function formatBytes(bytes: number) {
             </p>
           </div>
 
-          <!-- Local Path -->
+          <!-- Storage Connection -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              <Plug class="h-4 w-4 inline mr-1" />
+              {{ activeConnectionLabel }}
+            </label>
+            <select 
+              v-if="form.direction === 'SEND'"
+              v-model="form.sourceConnectionId" 
+              class="select"
+            >
+              <option value="">Local Filesystem</option>
+              <option v-for="conn in connections" :key="conn.id" :value="conn.id">
+                {{ conn.name }} ({{ conn.connectorType }})
+              </option>
+            </select>
+            <select 
+              v-else
+              v-model="form.destinationConnectionId" 
+              class="select"
+            >
+              <option value="">Local Filesystem</option>
+              <option v-for="conn in connections" :key="conn.id" :value="conn.id">
+                {{ conn.name }} ({{ conn.connectorType }})
+              </option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ form.direction === 'SEND' ? 'Where to read the file from' : 'Where to save the received file' }}
+            </p>
+          </div>
+
+          <!-- Filename -->
           <div>
             <template v-if="form.direction === 'SEND'">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Local File Path *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Filename *</label>
               <input 
-                v-model="form.localPath" 
+                v-model="form.filename" 
                 type="text" 
                 class="input" 
                 required 
-                placeholder="/path/to/file.txt"
+                :placeholder="form.sourceConnectionId ? 'path/to/file.txt' : '/full/path/to/file.txt'"
               />
-              <p class="text-xs text-gray-500 mt-1">Full path to the file to send</p>
+              <p class="text-xs text-gray-500 mt-1">
+                {{ form.sourceConnectionId ? 'Relative path on the storage connection' : 'Full local path to the file' }}
+              </p>
             </template>
             <template v-else>
               <PathPlaceholderInput
-                v-model="form.localPath"
-                label="Save To Path *"
-                placeholder="/data/received/${partner}/${file}"
+                v-model="form.filename"
+                label="Filename *"
+                :placeholder="form.destinationConnectionId ? 'received/${file}' : '/data/received/${partner}/${file}'"
                 direction="RECEIVE"
               />
-              <p class="text-xs text-gray-500 mt-1">Use placeholders for dynamic paths</p>
+              <p class="text-xs text-gray-500 mt-1">
+                {{ form.destinationConnectionId ? 'Path on the storage connection' : 'Local path (supports placeholders)' }}
+              </p>
             </template>
           </div>
 

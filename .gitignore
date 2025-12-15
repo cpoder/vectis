@@ -16,3 +16,6 @@ vectis-local/
 
 # Env
 .env
+
+# Connector plugins (hot-loaded JARs)
+**/connectors/

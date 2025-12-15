@@ -98,10 +98,14 @@ public class TransferSchedulerService {
         scheduleRepository.save(schedule);
 
         try {
+            // Use filename if available, fallback to deprecated localPath
+            String filename = schedule.getFilename() != null ? schedule.getFilename() : schedule.getLocalPath();
             TransferRequest request = TransferRequest.builder()
                     .server(schedule.getServerId())
                     .partnerId(schedule.getPartnerId())
-                    .localPath(schedule.getLocalPath())
+                    .filename(filename)
+                    .sourceConnectionId(schedule.getSourceConnectionId())
+                    .destinationConnectionId(schedule.getDestinationConnectionId())
                     .remoteFilename(schedule.getRemoteFilename())
                     .virtualFile(schedule.getVirtualFile())
                     .transferConfig(schedule.getTransferConfigId())
@@ -283,6 +287,7 @@ public class TransferSchedulerService {
             Instant scheduledAt, Integer intervalMinutes) {
         return favoriteRepository.findById(favoriteId)
                 .map(favorite -> {
+                    String filename = favorite.getFilename() != null ? favorite.getFilename() : favorite.getLocalPath();
                     ScheduledTransfer schedule = ScheduledTransfer.builder()
                             .name("Schedule: " + favorite.getName())
                             .favoriteId(favoriteId)
@@ -290,7 +295,9 @@ public class TransferSchedulerService {
                             .serverName(favorite.getServerName())
                             .partnerId(favorite.getPartnerId())
                             .direction(favorite.getDirection())
-                            .localPath(favorite.getLocalPath())
+                            .filename(filename)
+                            .sourceConnectionId(favorite.getSourceConnectionId())
+                            .destinationConnectionId(favorite.getDestinationConnectionId())
                             .remoteFilename(favorite.getRemoteFilename())
                             .virtualFile(favorite.getVirtualFile())
                             .transferConfigId(favorite.getTransferConfigId())

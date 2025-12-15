@@ -43,6 +43,11 @@ const router = createRouter({
           component: () => import('../views/CalendarsView.vue')
         },
         {
+          path: 'connectors',
+          name: 'connectors',
+          component: () => import('../views/ConnectorsView.vue')
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('../views/SettingsView.vue')
