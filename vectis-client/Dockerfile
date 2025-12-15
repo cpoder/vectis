@@ -2,8 +2,8 @@
 FROM eclipse-temurin:21-jre-alpine
 
 # Add non-root user
-RUN addgroup -g 1000 pesit && \
-    adduser -u 1000 -G pesit -s /bin/sh -D pesit
+RUN addgroup -g 1000 vectis && \
+    adduser -u 1000 -G vectis -s /bin/sh -D vectis
 
 WORKDIR /app
 
@@ -12,10 +12,10 @@ COPY target/vectis-client-*-exec.jar app.jar
 
 # Create directories for data
 RUN mkdir -p /data /app/data && \
-    chown -R pesit:pesit /data /app
+    chown -R vectis:vectis /data /app
 
 # Switch to non-root user
-USER pesit
+USER vectis
 
 # Expose ports
 # 8080 - REST API
