@@ -12,6 +12,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -59,6 +60,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @SuppressWarnings("null")
 public class TransferService {
+
+        private static final AtomicInteger TRANSFER_ID_COUNTER = new AtomicInteger(1);
 
         private final PesitServerService serverService;
         private final TransferConfigRepository configRepository;
@@ -472,9 +475,10 @@ public class TransferService {
                 int serverConnectionId = aconnect.getIdSrc();
 
                 // CREATE - use CreateMessageBuilder for correct structure
+                int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF; // PI_13 is 3 bytes max
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
-                                .transferId(1)
+                                .transferId(transferId)
                                 .priority(priority)
                                 .dataCode(2) // 0=ASCII, 1=EBCDIC, 2=binary
                                 .variableFormat()
@@ -586,15 +590,16 @@ public class TransferService {
                                 new ParameterValue(PI_11_TYPE_FICHIER, 0), // binary
                                 new ParameterValue(PI_12_NOM_FICHIER, virtualFile));
 
+                int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
                 Fpdu selectFpdu = new Fpdu(FpduType.SELECT)
                                 .withIdDst(serverConnectionId)
                                 .withParameter(pgi9)
-                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, 1))
+                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, transferId))
                                 .withParameter(new ParameterValue(PI_17_PRIORITE, config.getPriority()))
                                 .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, chunkSize));
 
                 session.sendFpduWithAck(selectFpdu);
-                log.info("File selected: {}", remoteFilename);
+                log.info("File selected: {}, transferId: {}", remoteFilename, transferId);
 
                 // OPEN - open file for reading (file-level - no idSrc)
                 Fpdu openFpdu = new Fpdu(FpduType.OPEN)
@@ -704,10 +709,11 @@ public class TransferService {
                                 new ParameterValue(PI_11_TYPE_FICHIER, 0),
                                 new ParameterValue(PI_12_NOM_FICHIER, virtualFile));
 
+                int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
                 Fpdu selectFpdu = new Fpdu(FpduType.SELECT)
                                 .withIdDst(serverConnectionId)
                                 .withParameter(pgi9)
-                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, 1))
+                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, transferId))
                                 .withParameter(new ParameterValue(PI_17_PRIORITE, config.getPriority()))
                                 .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, chunkSize));
                 session.sendFpduWithAck(selectFpdu);
@@ -783,10 +789,11 @@ public class TransferService {
                                 ParameterGroupIdentifier.PGI_09_ID_FICHIER,
                                 new ParameterValue(PI_12_NOM_FICHIER, "MESSAGE"));
 
+                int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
                 Fpdu msgFpdu = new Fpdu(FpduType.MSG)
                                 .withIdDst(serverConnectionId)
                                 .withParameter(pgi9)
-                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, 1))
+                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, transferId))
                                 .withParameter(new ParameterValue(PI_91_MESSAGE, message));
 
                 session.sendFpduWithAck(msgFpdu);
