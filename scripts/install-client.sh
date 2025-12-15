@@ -94,12 +94,17 @@ show_help() {
     echo "  curl -fsSL ... | bash -s -- --install-k3s --port-forward"
 }
 
+# Check if stdin is a terminal (for interactive prompts)
+is_tty() {
+    [ -t 0 ]
+}
+
 # Prompt user for yes/no
 prompt_yn() {
     local prompt="$1"
     local default="${2:-n}"
     
-    if [ "$INTERACTIVE" = false ]; then
+    if [ "$INTERACTIVE" = false ] || ! is_tty; then
         [ "$default" = "y" ] && return 0 || return 1
     fi
     
@@ -124,7 +129,7 @@ prompt_value() {
     local default="$2"
     local varname="$3"
     
-    if [ "$INTERACTIVE" = false ]; then
+    if [ "$INTERACTIVE" = false ] || ! is_tty; then
         eval "$varname=\"$default\""
         return
     fi
