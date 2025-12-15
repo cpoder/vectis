@@ -45,6 +45,13 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
   # OTLP metrics - disabled by default, enable with OTEL_EXPORTER_OTLP_ENDPOINT
   otlp:
     metrics:
