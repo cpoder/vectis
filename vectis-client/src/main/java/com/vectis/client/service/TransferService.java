@@ -188,25 +188,19 @@ public class TransferService {
 
                         TransportChannel channel = createChannel(server);
 
+                        // Always use a connector - local connector if none specified
+                        StorageConnector connector = destConnId != null
+                                        ? createConnectorFromConnectionId(destConnId)
+                                        : connectorRegistry.getConnector("local", java.util.Map.of());
+
                         long bytesReceived;
-                        if (destConnId != null) {
-                                // Write to storage connector
-                                StorageConnector connector = createConnectorFromConnectionId(destConnId);
-                                try (PesitSession session = new PesitSession(channel, false)) {
-                                        bytesReceived = executeReceiveTransferToConnector(session, server, request,
-                                                        connector, resolvedFilename, config);
-                                } finally {
-                                        connector.close();
-                                }
-                                log.info("Wrote {} bytes to connector {} path {}", bytesReceived, destConnId,
-                                                resolvedFilename);
-                        } else {
-                                // Write to local filesystem
-                                try (PesitSession session = new PesitSession(channel, false)) {
-                                        bytesReceived = executeReceiveTransfer(session, server, request,
-                                                        Path.of(resolvedFilename), config);
-                                }
+                        try (PesitSession session = new PesitSession(channel, false)) {
+                                bytesReceived = executeReceiveTransfer(session, server, request,
+                                                connector, resolvedFilename, config);
+                        } finally {
+                                connector.close();
                         }
+                        log.info("Wrote {} bytes to path {}", bytesReceived, resolvedFilename);
 
                         history.setStatus(TransferStatus.COMPLETED);
                         history.setFileSize(bytesReceived);
@@ -557,121 +551,6 @@ public class TransferService {
         }
 
         private long executeReceiveTransfer(PesitSession session, PesitServer server,
-                        TransferRequest request, Path localPath, TransferConfig config)
-                        throws IOException, InterruptedException {
-                int connectionId = 1;
-                int chunkSize = config.getChunkSize();
-                String remoteFilename = request.getRemoteFilename();
-
-                // CONNECT with read access - use ConnectMessageBuilder
-                Fpdu connectFpdu = new ConnectMessageBuilder()
-                                .demandeur(request.getPartnerId())
-                                .serveur(server.getServerId())
-                                .readAccess()
-                                .build(connectionId);
-
-                Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
-                int serverConnectionId = aconnect.getIdSrc();
-                log.info("Connected to server for receive, connection ID: {}", serverConnectionId);
-
-                // SELECT - file selection for reading
-                String virtualFile = request.getVirtualFile() != null ? request.getVirtualFile() : remoteFilename;
-                ParameterValue pgi9 = new ParameterValue(
-                                ParameterGroupIdentifier.PGI_09_ID_FICHIER,
-                                new ParameterValue(PI_11_TYPE_FICHIER, 0), // binary
-                                new ParameterValue(PI_12_NOM_FICHIER, virtualFile));
-
-                int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
-                Fpdu selectFpdu = new Fpdu(FpduType.SELECT)
-                                .withIdDst(serverConnectionId)
-                                .withParameter(pgi9)
-                                .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, transferId))
-                                .withParameter(new ParameterValue(PI_17_PRIORITE, config.getPriority()))
-                                .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, chunkSize));
-
-                session.sendFpduWithAck(selectFpdu);
-                log.info("File selected: {}, transferId: {}", remoteFilename, transferId);
-
-                // OPEN - open file for reading (file-level - no idSrc)
-                Fpdu openFpdu = new Fpdu(FpduType.OPEN)
-                                .withIdDst(serverConnectionId);
-                session.sendFpduWithAck(openFpdu);
-
-                // READ - request file data (file-level - no idSrc)
-                Fpdu readFpdu = new Fpdu(FpduType.READ)
-                                .withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_18_POINT_RELANCE, 0));
-                session.sendFpduWithAck(readFpdu);
-                log.info("Read request sent, receiving data...");
-
-                // Receive DTF chunks until DTF.END
-                long totalBytes = 0;
-                int chunkCount = 0;
-                try (OutputStream fileOut = Files.newOutputStream(localPath)) {
-                        boolean receiving = true;
-                        while (receiving) {
-                                byte[] rawFpdu = session.receiveRawFpdu();
-
-                                if (rawFpdu.length >= 4) {
-                                        int phase = rawFpdu[2] & 0xFF;
-                                        int type = rawFpdu[3] & 0xFF;
-
-                                        if (phase == 0x00 && (type == 0x00 || type == 0x40 || type == 0x41
-                                                        || type == 0x42)) {
-                                                // DTF - extract data (skip 6-byte header)
-                                                if (rawFpdu.length > 6) {
-                                                        int dataLen = rawFpdu.length - 6;
-                                                        fileOut.write(rawFpdu, 6, dataLen);
-                                                        totalBytes += dataLen;
-                                                        chunkCount++;
-                                                        log.debug("Received DTF chunk {}: {} bytes", chunkCount,
-                                                                        dataLen);
-                                                }
-                                        } else if (phase == 0xC0 && type == 0x22) {
-                                                // DTF.END - end of data transfer
-                                                log.info("Received DTF.END after {} chunks, {} bytes total", chunkCount,
-                                                                totalBytes);
-                                                receiving = false;
-                                        } else {
-                                                log.warn("Unexpected FPDU during receive: phase=0x{}, type=0x{}",
-                                                                String.format("%02X", phase),
-                                                                String.format("%02X", type));
-                                                receiving = false;
-                                        }
-                                }
-                        }
-                }
-                log.info("File data received: {} bytes in {} chunks", totalBytes, chunkCount);
-
-                // TRANS_END (file-level - no idSrc)
-                Fpdu transendFpdu = new Fpdu(FpduType.TRANS_END)
-                                .withIdDst(serverConnectionId);
-                session.sendFpduWithAck(transendFpdu);
-
-                // CLOSE (file-level - no idSrc)
-                Fpdu closeFpdu = new Fpdu(FpduType.CLOSE)
-                                .withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
-                session.sendFpduWithAck(closeFpdu);
-
-                // DESELECT (file-level - no idSrc)
-                Fpdu deselectFpdu = new Fpdu(FpduType.DESELECT)
-                                .withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
-                session.sendFpduWithAck(deselectFpdu);
-
-                // RELEASE (session-level - keeps idSrc)
-                Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
-                                .withIdDst(serverConnectionId)
-                                .withIdSrc(connectionId)
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
-                session.sendFpduWithAck(releaseFpdu);
-
-                log.info("Receive transfer completed: {}", remoteFilename);
-                return totalBytes;
-        }
-
-        private long executeReceiveTransferToConnector(PesitSession session, PesitServer server,
                         TransferRequest request, StorageConnector connector, String destPath, TransferConfig config)
                         throws IOException, InterruptedException, ConnectorException {
                 int connectionId = 1;
