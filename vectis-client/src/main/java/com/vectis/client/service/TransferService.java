@@ -38,6 +38,7 @@ import com.vectis.client.repository.TransferHistoryRepository;
 import com.vectis.client.transport.TlsTransportChannel;
 import com.vectis.connector.ConnectorException;
 import com.vectis.connector.StorageConnector;
+import com.vectis.fpdu.ConnectMessageBuilder;
 import com.vectis.fpdu.CreateMessageBuilder;
 import com.vectis.fpdu.Fpdu;
 import com.vectis.fpdu.FpduType;
@@ -459,17 +460,12 @@ public class TransferService {
                 log.info("Transfer config: virtualFile={}, fileType={}, chunkSize={}, priority={}",
                                 virtualFile, fileType, chunkSize, priority);
 
-                // CONNECT - use partnerId from request (PI_03 DEMANDEUR identifies the client)
-                Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
-                                .withIdSrc(connectionId)
-                                .withParameter(new ParameterValue(PI_03_DEMANDEUR, request.getPartnerId()))
-                                .withParameter(new ParameterValue(PI_04_SERVEUR, server.getServerId()))
-                                .withParameter(new ParameterValue(PI_06_VERSION, 2))
-                                .withParameter(new ParameterValue(PI_22_TYPE_ACCES, 0));
-
-                if (request.getPassword() != null && !request.getPassword().isEmpty()) {
-                        connectFpdu.withParameter(new ParameterValue(PI_05_CONTROLE_ACCES, request.getPassword()));
-                }
+                // CONNECT - use ConnectMessageBuilder for correct structure
+                Fpdu connectFpdu = new ConnectMessageBuilder()
+                                .demandeur(request.getPartnerId())
+                                .serveur(server.getServerId())
+                                .writeAccess()
+                                .build(connectionId);
 
                 Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
                 int serverConnectionId = aconnect.getIdSrc();
@@ -567,17 +563,12 @@ public class TransferService {
                 int chunkSize = config.getChunkSize();
                 String remoteFilename = request.getRemoteFilename();
 
-                // CONNECT with read access - use partnerId from request
-                Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
-                                .withIdSrc(connectionId)
-                                .withParameter(new ParameterValue(PI_03_DEMANDEUR, request.getPartnerId()))
-                                .withParameter(new ParameterValue(PI_04_SERVEUR, server.getServerId()))
-                                .withParameter(new ParameterValue(PI_06_VERSION, 2))
-                                .withParameter(new ParameterValue(PI_22_TYPE_ACCES, 1)); // Read access
-
-                if (request.getPassword() != null && !request.getPassword().isEmpty()) {
-                        connectFpdu.withParameter(new ParameterValue(PI_05_CONTROLE_ACCES, request.getPassword()));
-                }
+                // CONNECT with read access - use ConnectMessageBuilder
+                Fpdu connectFpdu = new ConnectMessageBuilder()
+                                .demandeur(request.getPartnerId())
+                                .serveur(server.getServerId())
+                                .readAccess()
+                                .build(connectionId);
 
                 Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
                 int serverConnectionId = aconnect.getIdSrc();
@@ -687,17 +678,12 @@ public class TransferService {
                 int chunkSize = config.getChunkSize();
                 String remoteFilename = request.getRemoteFilename();
 
-                // CONNECT with read access
-                Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
-                                .withIdSrc(connectionId)
-                                .withParameter(new ParameterValue(PI_03_DEMANDEUR, request.getPartnerId()))
-                                .withParameter(new ParameterValue(PI_04_SERVEUR, server.getServerId()))
-                                .withParameter(new ParameterValue(PI_06_VERSION, 2))
-                                .withParameter(new ParameterValue(PI_22_TYPE_ACCES, 1));
-
-                if (request.getPassword() != null && !request.getPassword().isEmpty()) {
-                        connectFpdu.withParameter(new ParameterValue(PI_05_CONTROLE_ACCES, request.getPassword()));
-                }
+                // CONNECT with read access - use ConnectMessageBuilder
+                Fpdu connectFpdu = new ConnectMessageBuilder()
+                                .demandeur(request.getPartnerId())
+                                .serveur(server.getServerId())
+                                .readAccess()
+                                .build(connectionId);
 
                 Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
                 int serverConnectionId = aconnect.getIdSrc();
@@ -773,13 +759,12 @@ public class TransferService {
                         throws IOException, InterruptedException {
                 int connectionId = 1;
 
-                // CONNECT
-                Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
-                                .withIdSrc(connectionId)
-                                .withParameter(new ParameterValue(PI_03_DEMANDEUR, partnerId))
-                                .withParameter(new ParameterValue(PI_04_SERVEUR, server.getServerId()))
-                                .withParameter(new ParameterValue(PI_06_VERSION, 2))
-                                .withParameter(new ParameterValue(PI_22_TYPE_ACCES, 0));
+                // CONNECT - use ConnectMessageBuilder
+                Fpdu connectFpdu = new ConnectMessageBuilder()
+                                .demandeur(partnerId)
+                                .serveur(server.getServerId())
+                                .writeAccess()
+                                .build(connectionId);
 
                 Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
                 int serverConnectionId = aconnect.getIdSrc();
@@ -810,8 +795,11 @@ public class TransferService {
                         String message, boolean usePi91) throws IOException, InterruptedException {
                 int connectionId = 1;
 
+                // CONNECT with message in PI_91 or PI_99 (special case - can't use
+                // ConnectMessageBuilder)
                 Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
                                 .withIdSrc(connectionId)
+                                .withIdDst(0) // Must be 0 for CONNECT
                                 .withParameter(new ParameterValue(PI_03_DEMANDEUR, partnerId))
                                 .withParameter(new ParameterValue(PI_04_SERVEUR, server.getServerId()))
                                 .withParameter(new ParameterValue(PI_06_VERSION, 2))
