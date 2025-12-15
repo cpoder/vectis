@@ -7,8 +7,8 @@ RUN addgroup -g 1000 pesit && \
 
 WORKDIR /app
 
-# Copy the pre-built JAR
-COPY target/vectis-client-*.jar app.jar
+# Copy the pre-built executable JAR (Spring Boot fat JAR)
+COPY target/vectis-client-*-exec.jar app.jar
 
 # Create directories for data
 RUN mkdir -p /data && \
@@ -28,4 +28,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # JVM options for containers
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0"
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=8080 -jar app.jar serve"]
