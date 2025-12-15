@@ -502,6 +502,8 @@ public class TransferService {
                                 .withIdDst(serverConnectionId)
                                 .withParameter(pgi9)
                                 .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, 1))
+                                .withParameter(new ParameterValue(PI_15_TRANSFERT_RELANCE, 0)) // 0 = not a restart
+                                .withParameter(new ParameterValue(PI_16_CODE_DONNEES, (int) 'V')) // V = variable
                                 .withParameter(new ParameterValue(PI_17_PRIORITE, priority))
                                 .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, chunkSize))
                                 .withParameter(pgi30)
