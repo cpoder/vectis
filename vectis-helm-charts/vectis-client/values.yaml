@@ -58,6 +58,10 @@ ingress:
 # Persistence for transfer data
 persistence:
   enabled: true
+  # Use hostPath for local development (set to local path like /home/user/vectis-store)
+  # Leave empty to use PVC instead
+  hostPath: ""
+  # PVC settings (used when hostPath is empty)
   storageClass: ""
   accessMode: ReadWriteOnce
   size: 10Gi

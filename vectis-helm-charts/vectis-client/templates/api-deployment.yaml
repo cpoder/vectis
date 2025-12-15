@@ -50,7 +50,11 @@ spec:
               mountPath: /app/data
       volumes:
         - name: data
-          {{- if .Values.persistence.enabled }}
+          {{- if and .Values.persistence.enabled .Values.persistence.hostPath }}
+          hostPath:
+            path: {{ .Values.persistence.hostPath }}
+            type: DirectoryOrCreate
+          {{- else if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "vectis-client.fullname" . }}-data
           {{- else }}

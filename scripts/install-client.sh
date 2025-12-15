@@ -14,6 +14,7 @@ PORT_FORWARD=false
 FORWARD_PORT=8080
 INSTALL_K3S=false
 INTERACTIVE=true
+STORAGE_PATH=""
 
 # Colors
 RED='\033[0;31m'
@@ -50,6 +51,10 @@ parse_args() {
                 INTERACTIVE=false
                 shift
                 ;;
+            --storage|-s)
+                STORAGE_PATH="$2"
+                shift 2
+                ;;
             --help|-h)
                 show_help
                 exit 0
@@ -73,6 +78,7 @@ show_help() {
     echo "  -p, --port PORT         Port for port forwarding (default: 8080)"
     echo "  -n, --namespace NAME    Kubernetes namespace (default: vectis)"
     echo "  -v, --version VERSION   Version/branch to install (default: main)"
+    echo "  -s, --storage PATH      Local storage path (default: ~/vectis-store)"
     echo "      --install-k3s       Install k3s if no Kubernetes cluster found"
     echo "  -y, --yes               Non-interactive mode, accept all defaults"
     echo "  -h, --help              Show this help message"
@@ -241,6 +247,35 @@ setup_namespace() {
     echo -e "${GREEN}✓ Namespace '$VECTIS_NAMESPACE' ready${NC}"
 }
 
+# Configure storage path
+configure_storage() {
+    # Default to ~/vectis-store expanded
+    local default_path="$HOME/vectis-store"
+    
+    if [ -z "$STORAGE_PATH" ]; then
+        if [ "$INTERACTIVE" = true ]; then
+            echo ""
+            echo -e "${YELLOW}Storage Configuration${NC}"
+            echo -e "${BLUE}Files will be stored in a local directory accessible to Kubernetes.${NC}"
+            prompt_value "Storage path" "$default_path" STORAGE_PATH
+        else
+            STORAGE_PATH="$default_path"
+        fi
+    fi
+    
+    # Expand ~ if present
+    STORAGE_PATH="${STORAGE_PATH/#\~/$HOME}"
+    
+    # Create directory if it doesn't exist
+    if [ ! -d "$STORAGE_PATH" ]; then
+        echo -e "${YELLOW}Creating storage directory: $STORAGE_PATH${NC}"
+        mkdir -p "$STORAGE_PATH"
+        chmod 755 "$STORAGE_PATH"
+    fi
+    
+    echo -e "${GREEN}✓ Storage path: $STORAGE_PATH${NC}"
+}
+
 # Download and deploy via Helm from GitHub
 deploy_helm() {
     echo ""
@@ -267,10 +302,17 @@ deploy_helm() {
         exit 1
     fi
     
+    # Build helm set arguments
+    HELM_ARGS=""
+    if [ -n "$STORAGE_PATH" ]; then
+        HELM_ARGS="--set persistence.hostPath=$STORAGE_PATH"
+    fi
+    
     # Install or upgrade using local chart
     echo -e "${YELLOW}Installing Helm chart...${NC}"
     helm upgrade --install vectis-client "$CHART_DIR" \
-        --namespace "$VECTIS_NAMESPACE"
+        --namespace "$VECTIS_NAMESPACE" \
+        $HELM_ARGS
     
     echo -e "${GREEN}✓ Helm release deployed${NC}"
     echo ""
@@ -380,6 +422,7 @@ main() {
     parse_args "$@"
     check_prereqs
     setup_namespace
+    configure_storage
     deploy_helm
     show_access_info
     
