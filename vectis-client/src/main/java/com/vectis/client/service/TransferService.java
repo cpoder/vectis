@@ -191,7 +191,7 @@ public class TransferService {
                         // Always use a connector - local connector if none specified
                         StorageConnector connector = destConnId != null
                                         ? createConnectorFromConnectionId(destConnId)
-                                        : connectorRegistry.getConnector("local", java.util.Map.of());
+                                        : connectorRegistry.createConnector("local", java.util.Map.of());
 
                         long bytesReceived;
                         try (PesitSession session = new PesitSession(channel, false)) {
