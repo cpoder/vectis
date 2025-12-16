@@ -34,6 +34,7 @@ ui:
   service:
     type: ClusterIP
     port: 80
+    nodePort: ""  # Set to use NodePort (e.g., 30080)
   
   resources:
     requests:

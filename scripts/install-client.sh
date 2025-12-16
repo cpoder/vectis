@@ -10,12 +10,11 @@ VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-vectis}"
 GITHUB_REPO="cpoder/vectis"
 HELM_CHART_PATH="vectis-helm-charts/vectis-client"
 HELM_CHART_BRANCH="${VECTIS_VERSION:-main}"
-PORT_FORWARD=false
-FORWARD_PORT=8080
 INSTALL_K3S=false
 INTERACTIVE=true
 STORAGE_PATH=""
 INGRESS_HOST="${INGRESS_HOST:-vectis.local}"
+NODE_PORT=""  # If set, use NodePort instead of Ingress
 
 # Colors
 RED='\033[0;31m'
@@ -28,12 +27,8 @@ NC='\033[0m'
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --port-forward|-f)
-                PORT_FORWARD=true
-                shift
-                ;;
             --port|-p)
-                FORWARD_PORT="$2"
+                NODE_PORT="$2"
                 shift 2
                 ;;
             --install-k3s)
@@ -82,16 +77,20 @@ show_help() {
     echo "  -n, --namespace NAME    Kubernetes namespace (default: vectis)"
     echo "  -v, --version VERSION   Version/branch to install (default: main)"
     echo "      --host HOSTNAME     Ingress hostname (default: vectis.local)"
+    echo "  -p, --port PORT         Use NodePort instead of Ingress (e.g., 30080)"
     echo "      --install-k3s       Install k3s if no Kubernetes cluster found"
     echo "  -y, --yes               Non-interactive mode, accept all defaults"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Examples:"
-    echo "  # Basic installation"
+    echo "  # Basic installation (uses Ingress on vectis.local)"
     echo "  curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-client.sh | bash"
     echo ""
     echo "  # Install with custom hostname"
     echo "  curl -fsSL ... | bash -s -- --host vectis.mycompany.com"
+    echo ""
+    echo "  # Install with NodePort on port 30080"
+    echo "  curl -fsSL ... | bash -s -- --port 30080"
     echo ""
     echo "  # Install k3s if needed, then install Vectis"
     echo "  curl -fsSL ... | bash -s -- --install-k3s"
@@ -341,7 +340,10 @@ deploy_helm() {
     if [ -n "$DATA_PATH" ]; then
         HELM_ARGS="$HELM_ARGS --set persistence.data.hostPath=$DATA_PATH"
     fi
-    if [ -n "$INGRESS_HOST" ]; then
+    if [ -n "$NODE_PORT" ]; then
+        # Use NodePort instead of Ingress
+        HELM_ARGS="$HELM_ARGS --set ui.service.nodePort=$NODE_PORT --set ingress.enabled=false"
+    elif [ -n "$INGRESS_HOST" ]; then
         HELM_ARGS="$HELM_ARGS --set ingress.hosts[0].host=$INGRESS_HOST"
     fi
     
@@ -381,22 +383,31 @@ show_access_info() {
     echo ""
     echo -e "${GREEN}Vectis Client is now installed.${NC}"
     echo ""
-    echo -e "${YELLOW}Access the UI:${NC}"
-    echo -e "  ${BLUE}http://$INGRESS_HOST${NC}"
-    echo ""
     
-    # Check if hostname resolves
-    if ! getent hosts "$INGRESS_HOST" &>/dev/null; then
-        echo -e "${YELLOW}Note: Add this entry to your /etc/hosts:${NC}"
-        # Get node IP
-        NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "127.0.0.1")
-        echo -e "  ${BLUE}$NODE_IP  $INGRESS_HOST${NC}"
+    # Get node IP
+    NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "127.0.0.1")
+    
+    if [ -n "$NODE_PORT" ]; then
+        # NodePort access
+        echo -e "${YELLOW}Access the UI:${NC}"
+        echo -e "  ${BLUE}http://$NODE_IP:$NODE_PORT${NC}"
+    else
+        # Ingress access
+        echo -e "${YELLOW}Access the UI:${NC}"
+        echo -e "  ${BLUE}http://$INGRESS_HOST${NC}"
         echo ""
         
-        if [ "$INTERACTIVE" = true ]; then
-            if prompt_yn "Add entry to /etc/hosts now? (requires sudo)" "y"; then
-                echo "$NODE_IP  $INGRESS_HOST" | sudo tee -a /etc/hosts >/dev/null
-                echo -e "${GREEN}✓ Added to /etc/hosts${NC}"
+        # Check if hostname resolves
+        if ! getent hosts "$INGRESS_HOST" &>/dev/null; then
+            echo -e "${YELLOW}Note: Add this entry to your /etc/hosts:${NC}"
+            echo -e "  ${BLUE}$NODE_IP  $INGRESS_HOST${NC}"
+            echo ""
+            
+            if [ "$INTERACTIVE" = true ]; then
+                if prompt_yn "Add entry to /etc/hosts now? (requires sudo)" "y"; then
+                    echo "$NODE_IP  $INGRESS_HOST" | sudo tee -a /etc/hosts >/dev/null
+                    echo -e "${GREEN}✓ Added to /etc/hosts${NC}"
+                fi
             fi
         fi
     fi
