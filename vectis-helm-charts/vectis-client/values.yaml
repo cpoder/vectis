@@ -55,16 +55,31 @@ ingress:
           pathType: Prefix
   tls: []
 
-# Persistence for transfer data
+# Persistence configuration
 persistence:
-  enabled: true
-  # Use hostPath for local development (set to local path like /home/user/vectis-store)
-  # Leave empty to use PVC instead
-  hostPath: ""
-  # PVC settings (used when hostPath is empty)
-  storageClass: ""
-  accessMode: ReadWriteOnce
-  size: 10Gi
+  # Database storage (H2 database files)
+  store:
+    enabled: true
+    # Use hostPath for local development (e.g., /home/user/vectis-store)
+    hostPath: ""
+    # PVC settings (used when hostPath is empty)
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    # Mount path inside container
+    mountPath: /app/data
+  
+  # Data storage (files to transfer)
+  data:
+    enabled: true
+    # Use hostPath for local development (e.g., /home/user/vectis-data)
+    hostPath: ""
+    # PVC settings (used when hostPath is empty)
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    # Mount path inside container
+    mountPath: /app/files
 
 # Service Account
 serviceAccount:

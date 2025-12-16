@@ -21,10 +21,12 @@ spec:
       initContainers:
         - name: init-permissions
           image: busybox:latest
-          command: ['sh', '-c', 'chown -R 1000:1000 /app/data && chmod 755 /app/data']
+          command: ['sh', '-c', 'chown -R 1000:1000 /app/data /app/files && chmod 755 /app/data /app/files']
           volumeMounts:
-            - name: data
+            - name: store
               mountPath: /app/data
+            - name: data
+              mountPath: /app/files
           securityContext:
             runAsUser: 0
       containers:
@@ -57,15 +59,28 @@ spec:
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           volumeMounts:
+            - name: store
+              mountPath: {{ .Values.persistence.store.mountPath | default "/app/data" }}
             - name: data
-              mountPath: /app/data
+              mountPath: {{ .Values.persistence.data.mountPath | default "/app/files" }}
       volumes:
-        - name: data
-          {{- if and .Values.persistence.enabled .Values.persistence.hostPath }}
+        - name: store
+          {{- if and .Values.persistence.store.enabled .Values.persistence.store.hostPath }}
           hostPath:
-            path: {{ .Values.persistence.hostPath }}
+            path: {{ .Values.persistence.store.hostPath }}
             type: DirectoryOrCreate
-          {{- else if .Values.persistence.enabled }}
+          {{- else if .Values.persistence.store.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "vectis-client.fullname" . }}-store
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: data
+          {{- if and .Values.persistence.data.enabled .Values.persistence.data.hostPath }}
+          hostPath:
+            path: {{ .Values.persistence.data.hostPath }}
+            type: DirectoryOrCreate
+          {{- else if .Values.persistence.data.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "vectis-client.fullname" . }}-data
           {{- else }}

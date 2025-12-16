@@ -259,33 +259,46 @@ setup_namespace() {
     echo -e "${GREEN}✓ Namespace '$VECTIS_NAMESPACE' ready${NC}"
 }
 
-# Configure storage path
+# Configure storage paths
 configure_storage() {
-    # Default to ~/vectis-store expanded
-    local default_path="$HOME/vectis-store"
+    # Default paths
+    local default_store="$HOME/vectis-store"
+    local default_data="$HOME/vectis-data"
     
-    if [ -z "$STORAGE_PATH" ]; then
-        if [ "$INTERACTIVE" = true ]; then
-            echo ""
-            echo -e "${YELLOW}Storage Configuration${NC}"
-            echo -e "${BLUE}Files will be stored in a local directory accessible to Kubernetes.${NC}"
-            prompt_value "Storage path" "$default_path" STORAGE_PATH
-        else
-            STORAGE_PATH="$default_path"
+    if [ "$INTERACTIVE" = true ]; then
+        echo ""
+        echo -e "${YELLOW}Storage Configuration${NC}"
+        echo -e "${BLUE}Two storage locations are needed:${NC}"
+        echo -e "${BLUE}  - Store: Database files (H2)${NC}"
+        echo -e "${BLUE}  - Data: Files for transfer${NC}"
+        echo ""
+        
+        if [ -z "$STORE_PATH" ]; then
+            prompt_value "Database storage path (vectis-store)" "$default_store" STORE_PATH
         fi
+        if [ -z "$DATA_PATH" ]; then
+            prompt_value "File storage path (vectis-data)" "$default_data" DATA_PATH
+        fi
+    else
+        STORE_PATH="${STORE_PATH:-$default_store}"
+        DATA_PATH="${DATA_PATH:-$default_data}"
     fi
     
     # Expand ~ if present
-    STORAGE_PATH="${STORAGE_PATH/#\~/$HOME}"
+    STORE_PATH="${STORE_PATH/#\~/$HOME}"
+    DATA_PATH="${DATA_PATH/#\~/$HOME}"
     
-    # Create directory if it doesn't exist
-    if [ ! -d "$STORAGE_PATH" ]; then
-        echo -e "${YELLOW}Creating storage directory: $STORAGE_PATH${NC}"
-        mkdir -p "$STORAGE_PATH"
-        chmod 755 "$STORAGE_PATH"
-    fi
+    # Create directories if they don't exist
+    for path in "$STORE_PATH" "$DATA_PATH"; do
+        if [ ! -d "$path" ]; then
+            echo -e "${YELLOW}Creating directory: $path${NC}"
+            mkdir -p "$path"
+            chmod 755 "$path"
+        fi
+    done
     
-    echo -e "${GREEN}✓ Storage path: $STORAGE_PATH${NC}"
+    echo -e "${GREEN}✓ Store path: $STORE_PATH${NC}"
+    echo -e "${GREEN}✓ Data path: $DATA_PATH${NC}"
 }
 
 # Download and deploy via Helm from GitHub
@@ -316,8 +329,11 @@ deploy_helm() {
     
     # Build helm set arguments
     HELM_ARGS=""
-    if [ -n "$STORAGE_PATH" ]; then
-        HELM_ARGS="--set persistence.hostPath=$STORAGE_PATH"
+    if [ -n "$STORE_PATH" ]; then
+        HELM_ARGS="$HELM_ARGS --set persistence.store.hostPath=$STORE_PATH"
+    fi
+    if [ -n "$DATA_PATH" ]; then
+        HELM_ARGS="$HELM_ARGS --set persistence.data.hostPath=$DATA_PATH"
     fi
     
     # Install or upgrade using local chart
