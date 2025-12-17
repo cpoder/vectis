@@ -1,9 +1,15 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Vectis',
+  title: 'PeSIT Wizard',
   description: 'Solution moderne de transfert de fichiers bancaires',
   lang: 'fr-FR',
+  
+  // Ignore localhost links used in development examples
+  ignoreDeadLinks: [
+    /^http:\/\/localhost/,
+    /^\/guide\/server\/clustering/
+  ],
   
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }]
@@ -16,7 +22,7 @@ export default defineConfig({
       { text: 'Accueil', link: '/' },
       { text: 'Guide', link: '/guide/' },
       { text: 'API', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/cpoder/vectis' }
+      { text: 'GitHub', link: 'https://github.com/cpoder/pesitwizard' }
     ],
 
     sidebar: {
@@ -30,7 +36,7 @@ export default defineConfig({
           ]
         },
         {
-          text: 'Vectis Client',
+          text: 'PeSIT Wizard Client',
           items: [
             { text: 'Installation', link: '/guide/client/installation' },
             { text: 'Configuration', link: '/guide/client/configuration' },
@@ -39,7 +45,7 @@ export default defineConfig({
           ]
         },
         {
-          text: 'Vectis Server',
+          text: 'PeSIT Wizard Server',
           items: [
             { text: 'Installation', link: '/guide/server/installation' },
             { text: 'Configuration', link: '/guide/server/configuration' },
@@ -60,11 +66,11 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/cpoder/vectis' }
+      { icon: 'github', link: 'https://github.com/cpoder/pesitwizard' }
     ],
 
     footer: {
-      message: 'Vectis - Solution PeSIT moderne pour les entreprises',
+      message: 'PeSIT Wizard - Solution PeSIT moderne pour les entreprises',
       copyright: 'Copyright © 2025'
     },
 
