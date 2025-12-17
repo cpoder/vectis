@@ -1,6 +1,6 @@
-# Contributing to Vectis
+# Contributing to PeSIT Wizard
 
-Thank you for your interest in contributing to Vectis!
+Thank you for your interest in contributing to PeSIT Wizard!
 
 ## How to Contribute
 

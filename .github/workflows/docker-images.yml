@@ -28,39 +28,39 @@ jobs:
           cache: maven
 
       # Build all Maven modules in dependency order
-      - name: Build vectis-pesit
+      - name: Build pesitwizard-pesit
         run: mvn -B install -DskipTests
-        working-directory: vectis-pesit
+        working-directory: pesitwizard-pesit
 
-      - name: Build vectis-connector-api
+      - name: Build pesitwizard-connector-api
         run: mvn -B install -DskipTests
-        working-directory: vectis-connector-api
+        working-directory: pesitwizard-connector-api
 
-      - name: Build vectis-connector-local
+      - name: Build pesitwizard-connector-local
         run: mvn -B install -DskipTests
-        working-directory: vectis-connector-local
+        working-directory: pesitwizard-connector-local
 
-      - name: Build vectis-connector-sftp
+      - name: Build pesitwizard-connector-sftp
         run: mvn -B package -DskipTests
-        working-directory: vectis-connector-sftp
+        working-directory: pesitwizard-connector-sftp
 
-      - name: Build vectis-connector-s3
+      - name: Build pesitwizard-connector-s3
         run: mvn -B package -DskipTests
-        working-directory: vectis-connector-s3
+        working-directory: pesitwizard-connector-s3
 
-      - name: Prepare connectors for vectis-client
+      - name: Prepare connectors for pesitwizard-client
         run: |
-          mkdir -p vectis-client/connectors
-          cp vectis-connector-sftp/target/vectis-connector-sftp-*.jar vectis-client/connectors/
-          cp vectis-connector-s3/target/vectis-connector-s3-*.jar vectis-client/connectors/
+          mkdir -p pesitwizard-client/connectors
+          cp pesitwizard-connector-sftp/target/pesitwizard-connector-sftp-*.jar pesitwizard-client/connectors/
+          cp pesitwizard-connector-s3/target/pesitwizard-connector-s3-*.jar pesitwizard-client/connectors/
 
-      - name: Build vectis-client
+      - name: Build pesitwizard-client
         run: mvn -B install -DskipTests
-        working-directory: vectis-client
+        working-directory: pesitwizard-client
 
-      - name: Build vectis-server
+      - name: Build pesitwizard-server
         run: mvn -B package -DskipTests
-        working-directory: vectis-server
+        working-directory: pesitwizard-server
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -72,69 +72,69 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and push vectis-client image
-      - name: Extract metadata for vectis-client
+      # Build and push pesitwizard-client image
+      - name: Extract metadata for pesitwizard-client
         id: meta-client
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/vectis-client
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/pesitwizard-client
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push vectis-client
+      - name: Build and push pesitwizard-client
         uses: docker/build-push-action@v5
         with:
-          context: ./vectis-client
-          file: ./vectis-client/Dockerfile
+          context: ./pesitwizard-client
+          file: ./pesitwizard-client/Dockerfile
           push: true
           tags: ${{ steps.meta-client.outputs.tags }}
           labels: ${{ steps.meta-client.outputs.labels }}
           cache-from: type=gha,scope=client
           cache-to: type=gha,mode=max,scope=client
 
-      # Build and push vectis-client-ui image
-      - name: Extract metadata for vectis-client-ui
+      # Build and push pesitwizard-client-ui image
+      - name: Extract metadata for pesitwizard-client-ui
         id: meta-client-ui
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/vectis-client-ui
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/pesitwizard-client-ui
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push vectis-client-ui
+      - name: Build and push pesitwizard-client-ui
         uses: docker/build-push-action@v5
         with:
-          context: ./vectis-client-ui
-          file: ./vectis-client-ui/Dockerfile
+          context: ./pesitwizard-client-ui
+          file: ./pesitwizard-client-ui/Dockerfile
           push: true
           tags: ${{ steps.meta-client-ui.outputs.tags }}
           labels: ${{ steps.meta-client-ui.outputs.labels }}
           cache-from: type=gha,scope=client-ui
           cache-to: type=gha,mode=max,scope=client-ui
 
-      # Build and push vectis-server image
-      - name: Extract metadata for vectis-server
+      # Build and push pesitwizard-server image
+      - name: Extract metadata for pesitwizard-server
         id: meta-server
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/vectis-server
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/pesitwizard-server
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push vectis-server
+      - name: Build and push pesitwizard-server
         uses: docker/build-push-action@v5
         with:
-          context: ./vectis-server
-          file: ./vectis-server/Dockerfile
+          context: ./pesitwizard-server
+          file: ./pesitwizard-server/Dockerfile
           push: true
           tags: ${{ steps.meta-server.outputs.tags }}
           labels: ${{ steps.meta-server.outputs.labels }}

@@ -1,10 +1,10 @@
 #!/bin/bash
 # Vectis Uninstall Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/uninstall.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/uninstall.sh | bash
 
 set -e
 
-VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-vectis}"
+VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-pesitwizard}"
 
 # Colors
 RED='\033[0;31m'
@@ -60,16 +60,16 @@ uninstall_helm() {
     echo ""
     echo -e "${YELLOW}Uninstalling Helm releases...${NC}"
     
-    # Uninstall vectis-client if exists
-    if helm list -n "$VECTIS_NAMESPACE" | grep -q vectis-client; then
-        helm uninstall vectis-client --namespace "$VECTIS_NAMESPACE" --wait
-        echo -e "${GREEN}✓ vectis-client uninstalled${NC}"
+    # Uninstall pesitwizard-client if exists
+    if helm list -n "$VECTIS_NAMESPACE" | grep -q pesitwizard-client; then
+        helm uninstall pesitwizard-client --namespace "$VECTIS_NAMESPACE" --wait
+        echo -e "${GREEN}✓ pesitwizard-client uninstalled${NC}"
     fi
     
-    # Uninstall vectis-server if exists
-    if helm list -n "$VECTIS_NAMESPACE" | grep -q vectis-server; then
-        helm uninstall vectis-server --namespace "$VECTIS_NAMESPACE" --wait
-        echo -e "${GREEN}✓ vectis-server uninstalled${NC}"
+    # Uninstall pesitwizard-server if exists
+    if helm list -n "$VECTIS_NAMESPACE" | grep -q pesitwizard-server; then
+        helm uninstall pesitwizard-server --namespace "$VECTIS_NAMESPACE" --wait
+        echo -e "${GREEN}✓ pesitwizard-server uninstalled${NC}"
     fi
 }
 
@@ -124,7 +124,7 @@ parse_args() {
                 echo ""
                 echo "Options:"
                 echo "  -f, --force            Skip confirmation prompt"
-                echo "  -n, --namespace NAME   Specify namespace (default: vectis)"
+                echo "  -n, --namespace NAME   Specify namespace (default: pesitwizard)"
                 echo "  --delete-namespace     Also delete the namespace"
                 echo "  -h, --help             Show this help message"
                 exit 0

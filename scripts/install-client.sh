@@ -1,19 +1,19 @@
 #!/bin/bash
 # Vectis Client Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-client.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/install-client.sh | bash
 # Or with options: curl -fsSL ... | bash -s -- --port-forward --port 9090
 
 set -e
 
 # Default values
-VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-vectis}"
-GITHUB_REPO="cpoder/vectis"
-HELM_CHART_PATH="vectis-helm-charts/vectis-client"
+VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-pesitwizard}"
+GITHUB_REPO="cpoder/pesitwizard"
+HELM_CHART_PATH="pesitwizard-helm-charts/pesitwizard-client"
 HELM_CHART_BRANCH="${VECTIS_VERSION:-main}"
 INSTALL_K3S=false
 INTERACTIVE=true
 STORAGE_PATH=""
-INGRESS_HOST="${INGRESS_HOST:-vectis.local}"
+INGRESS_HOST="${INGRESS_HOST:-pesitwizard.local}"
 INGRESS_PORT=""  # Ingress Controller port (default: 80)
 NODE_PORT=""  # If set, use NodePort instead of Ingress
 
@@ -75,20 +75,20 @@ show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  -n, --namespace NAME    Kubernetes namespace (default: vectis)"
+    echo "  -n, --namespace NAME    Kubernetes namespace (default: pesitwizard)"
     echo "  -v, --version VERSION   Version/branch to install (default: main)"
-    echo "      --host HOSTNAME     Ingress hostname (default: vectis.local)"
+    echo "      --host HOSTNAME     Ingress hostname (default: pesitwizard.local)"
     echo "  -p, --port PORT         Use NodePort instead of Ingress (e.g., 30080)"
     echo "      --install-k3s       Install k3s if no Kubernetes cluster found"
     echo "  -y, --yes               Non-interactive mode, accept all defaults"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Examples:"
-    echo "  # Basic installation (uses Ingress on vectis.local)"
-    echo "  curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-client.sh | bash"
+    echo "  # Basic installation (uses Ingress on pesitwizard.local)"
+    echo "  curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/install-client.sh | bash"
     echo ""
     echo "  # Install with custom hostname"
-    echo "  curl -fsSL ... | bash -s -- --host vectis.mycompany.com"
+    echo "  curl -fsSL ... | bash -s -- --host pesitwizard.mycompany.com"
     echo ""
     echo "  # Install with NodePort on port 30080"
     echo "  curl -fsSL ... | bash -s -- --port 30080"
@@ -346,8 +346,8 @@ configure_ingress_port() {
 # Configure storage paths
 configure_storage() {
     # Default paths
-    local default_store="$HOME/vectis-store"
-    local default_data="$HOME/vectis-data"
+    local default_store="$HOME/pesitwizard-store"
+    local default_data="$HOME/pesitwizard-data"
     
     if [ "$INTERACTIVE" = true ]; then
         echo ""
@@ -358,10 +358,10 @@ configure_storage() {
         echo ""
         
         if [ -z "$STORE_PATH" ]; then
-            prompt_value "Database storage path (vectis-store)" "$default_store" STORE_PATH
+            prompt_value "Database storage path (pesitwizard-store)" "$default_store" STORE_PATH
         fi
         if [ -z "$DATA_PATH" ]; then
-            prompt_value "File storage path (vectis-data)" "$default_data" DATA_PATH
+            prompt_value "File storage path (pesitwizard-data)" "$default_data" DATA_PATH
         fi
     else
         STORE_PATH="${STORE_PATH:-$default_store}"
@@ -431,7 +431,7 @@ deploy_helm() {
     
     # Install or upgrade using local chart
     echo -e "${YELLOW}Installing Helm chart...${NC}"
-    helm upgrade --install vectis-client "$CHART_DIR" \
+    helm upgrade --install pesitwizard-client "$CHART_DIR" \
         --namespace "$VECTIS_NAMESPACE" \
         $HELM_ARGS
     
@@ -440,7 +440,7 @@ deploy_helm() {
     echo -e "${YELLOW}Waiting for pods to be ready...${NC}"
     
     # Wait for deployments with progress feedback
-    DEPLOYMENTS=$(kubectl get deployments -n "$VECTIS_NAMESPACE" -l app.kubernetes.io/instance=vectis-client -o name 2>/dev/null || true)
+    DEPLOYMENTS=$(kubectl get deployments -n "$VECTIS_NAMESPACE" -l app.kubernetes.io/instance=pesitwizard-client -o name 2>/dev/null || true)
     
     if [ -n "$DEPLOYMENTS" ]; then
         for deploy in $DEPLOYMENTS; do
@@ -503,7 +503,7 @@ show_access_info() {
     echo -e "  ${BLUE}kubectl get pods -n $VECTIS_NAMESPACE${NC}"
     echo ""
     echo "To uninstall:"
-    echo -e "  ${BLUE}helm uninstall vectis-client -n $VECTIS_NAMESPACE${NC}"
+    echo -e "  ${BLUE}helm uninstall pesitwizard-client -n $VECTIS_NAMESPACE${NC}"
     echo ""
 }
 

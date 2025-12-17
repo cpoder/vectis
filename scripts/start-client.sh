@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start vectis-client backend and UI
+# Start pesitwizard-client backend and UI
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -7,11 +7,11 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 echo "Starting Vectis Client..."
 
 # Kill existing processes
-pkill -f "spring-boot:run.*vectis-client" 2>/dev/null
+pkill -f "spring-boot:run.*pesitwizard-client" 2>/dev/null
 pkill -f "PesitClientApplication" 2>/dev/null
-# Kill vite processes in vectis-client-ui directory
+# Kill vite processes in pesitwizard-client-ui directory
 for pid in $(pgrep -f "node.*vite"); do
-  if lsof -p $pid 2>/dev/null | grep -q vectis-client-ui; then
+  if lsof -p $pid 2>/dev/null | grep -q pesitwizard-client-ui; then
     kill $pid 2>/dev/null
   fi
 done
@@ -21,12 +21,12 @@ sleep 1
 export SERVER_PORT=9081
 
 # Ensure data directory exists
-mkdir -p "$PROJECT_DIR/vectis-client/data"
+mkdir -p "$PROJECT_DIR/pesitwizard-client/data"
 
 # Start backend
-cd "$PROJECT_DIR/vectis-client"
-nohup env SERVER_PORT="$SERVER_PORT" mvn spring-boot:run -Dspring-boot.run.arguments=serve -DskipTests > /tmp/vectis-client.log 2>&1 &
-echo "Client backend starting (log: /tmp/vectis-client.log)"
+cd "$PROJECT_DIR/pesitwizard-client"
+nohup env SERVER_PORT="$SERVER_PORT" mvn spring-boot:run -Dspring-boot.run.arguments=serve -DskipTests > /tmp/pesitwizard-client.log 2>&1 &
+echo "Client backend starting (log: /tmp/pesitwizard-client.log)"
 
 # Wait for backend
 echo -n "Waiting for backend..."
@@ -40,7 +40,7 @@ for i in {1..30}; do
 done
 
 # Start UI
-cd "$PROJECT_DIR/vectis-client-ui"
-nohup npm run dev -- --port 3001 --strictPort > /tmp/vectis-client-ui.log 2>&1 &
+cd "$PROJECT_DIR/pesitwizard-client-ui"
+nohup npm run dev -- --port 3001 --strictPort > /tmp/pesitwizard-client-ui.log 2>&1 &
 sleep 2
 echo "Client UI started at http://localhost:3001"

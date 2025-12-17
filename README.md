@@ -1,4 +1,4 @@
-# Vectis - Open Source PeSIT File Transfer
+# PeSIT Wizard - Open Source PeSIT File Transfer
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21+-orange.svg)](https://openjdk.org/)
@@ -17,11 +17,11 @@ PeSIT est le protocole standard utilisé par les banques françaises pour les é
 
 | Module | Description |
 |--------|-------------|
-| `vectis-server` | Serveur PeSIT complet avec API REST |
-| `vectis-client` | Client Java pour envoyer/recevoir des fichiers |
-| `vectis-client-ui` | Interface graphique pour le client |
-| `vectis-pesit` | Bibliothèque d'implémentation du protocole PeSIT |
-| `vectis-docs` | Documentation |
+| `pesitwizard-server` | Serveur PeSIT complet avec API REST |
+| `pesitwizard-client` | Client Java pour envoyer/recevoir des fichiers |
+| `pesitwizard-client-ui` | Interface graphique pour le client |
+| `pesitwizard-pesit` | Bibliothèque d'implémentation du protocole PeSIT |
+| `pesitwizard-docs` | Documentation |
 
 ## Démarrage rapide
 
@@ -34,15 +34,15 @@ PeSIT est le protocole standard utilisé par les banques françaises pour les é
 
 ```bash
 # Cloner le repo
-git clone https://github.com/cpoder/vectis.git
-cd vectis
+git clone https://github.com/cpoder/pesitwizard.git
+cd pesitwizard
 
 # Builder le serveur
-cd vectis-server
+cd pesitwizard-server
 mvn package -DskipTests
 
 # Lancer le serveur
-java -jar target/vectis-server-1.0.0-SNAPSHOT.jar
+java -jar target/pesitwizard-server-1.0.0-SNAPSHOT.jar
 ```
 
 Le serveur démarre sur :
@@ -53,7 +53,7 @@ Le serveur démarre sur :
 
 ```bash
 # Avec le client Java
-cd vectis-client
+cd pesitwizard-client
 mvn exec:java -Dexec.args="send -h localhost -p 5000 -f /path/to/file.txt"
 ```
 
@@ -72,7 +72,7 @@ curl http://localhost:8080/api/v1/transfers
 ### Fichier `application.yml`
 
 ```yaml
-vectis:
+pesitwizard:
   server:
     port: 5000
     ssl:
@@ -80,72 +80,72 @@ vectis:
   
 spring:
   datasource:
-    url: jdbc:h2:file:./data/vectis-db
+    url: jdbc:h2:file:./data/pesitwizard-db
 ```
 
 ### Variables d'environnement
 
 | Variable | Description | Défaut |
 |----------|-------------|--------|
-| `VECTIS_SERVER_PORT` | Port PeSIT | `5000` |
+| `PESITWIZARD_SERVER_PORT` | Port PeSIT | `5000` |
 | `SERVER_PORT` | Port API REST | `8080` |
 
 ## Docker
 
 ```bash
 # Builder l'image
-docker build -t vectis-server ./vectis-server
+docker build -t pesitwizard-server ./pesitwizard-server
 
 # Lancer
-docker run -p 5000:5000 -p 8080:8080 vectis-server
+docker run -p 5000:5000 -p 8080:8080 pesitwizard-server
 ```
 
 ## Kubernetes
 
 ### Installation rapide
 
-**Client Vectis** (transfert de fichiers avec UI) :
+**Client PeSIT Wizard** (transfert de fichiers avec UI) :
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-client.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/install-client.sh | bash
 ```
 
-**Serveur Vectis** (standalone) :
+**Serveur PeSIT Wizard** (standalone) :
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-server.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/install-server.sh | bash
 ```
 
 **Désinstallation** :
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/uninstall.sh | bash
 ```
 
 ### Helm Charts
 
-Les charts Helm sont disponibles dans `vectis-helm-charts/` :
-- `vectis-client` : Client avec API et UI
-- `vectis-server` : Serveur standalone
+Les charts Helm sont disponibles dans `pesitwizard-helm-charts/` :
+- `pesitwizard-client` : Client avec API et UI
+- `pesitwizard-server` : Serveur standalone
 
 ```bash
 # Installation manuelle avec Helm
-helm install vectis-client ./vectis-helm-charts/vectis-client -n vectis --create-namespace
-helm install vectis-server ./vectis-helm-charts/vectis-server -n vectis --create-namespace
+helm install pesitwizard-client ./pesitwizard-helm-charts/pesitwizard-client -n pesitwizard --create-namespace
+helm install pesitwizard-server ./pesitwizard-helm-charts/pesitwizard-server -n pesitwizard --create-namespace
 ```
 
 ## Documentation
 
-- [Guide de démarrage](https://docs.vectis.cloud/guide/quickstart)
-- [Configuration serveur](https://docs.vectis.cloud/guide/server/configuration)
-- [API REST](https://docs.vectis.cloud/api/)
+- [Guide de démarrage](https://docs.pesitwizard.cloud/guide/quickstart)
+- [Configuration serveur](https://docs.pesitwizard.cloud/guide/server/configuration)
+- [API REST](https://docs.pesitwizard.cloud/api/)
 
 ## Structure du projet
 
 ```
-vectis/
-├── vectis-server/       # Serveur PeSIT
-├── vectis-client/       # Client Java
-├── vectis-client-ui/    # Interface client (Vue.js)
-├── vectis-pesit/        # Bibliothèque protocole
-├── vectis-docs/         # Documentation (VitePress)
+pesitwizard/
+├── pesitwizard-server/       # Serveur PeSIT
+├── pesitwizard-client/       # Client Java
+├── pesitwizard-client-ui/    # Interface client (Vue.js)
+├── pesitwizard-pesit/        # Bibliothèque protocole
+├── pesitwizard-docs/         # Documentation (VitePress)
 └── scripts/             # Scripts utilitaires
 ```
 
@@ -155,7 +155,7 @@ Les contributions sont les bienvenues ! Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Enterprise
 
-Pour les fonctionnalités entreprise (clustering HA, console d'administration, support), voir [Vectis Enterprise](https://vectis.cloud).
+Pour les fonctionnalités entreprise (clustering HA, console d'administration, support), voir [PeSIT Wizard Enterprise](https://pesitwizard.cloud).
 
 ## Licence
 
@@ -163,4 +163,4 @@ Pour les fonctionnalités entreprise (clustering HA, console d'administration, s
 
 ---
 
-**Vectis** - Solution PeSIT moderne et open source.
+**PeSIT Wizard** - Solution PeSIT moderne et open source.

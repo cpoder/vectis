@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pesitwizard-client.fullname" . }}-api
+  labels:
+    {{- include "pesitwizard-client.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pesitwizard-client.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pesitwizard-client.api.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "pesitwizard-client.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: init-permissions
+          image: busybox:latest
+          command: ['sh', '-c', 'chown -R 1000:1000 /app/data && chmod 755 /app/data && chmod 777 /app/files']
+          volumeMounts:
+            - name: store
+              mountPath: /app/data
+            - name: data
+              mountPath: /app/files
+          securityContext:
+            runAsUser: 0
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "kubernetes,nosecurity"
+            - name: SERVER_PORT
+              value: "8080"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            failureThreshold: 10
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          volumeMounts:
+            - name: store
+              mountPath: {{ .Values.persistence.store.mountPath | default "/app/data" }}
+            - name: data
+              mountPath: {{ .Values.persistence.data.mountPath | default "/app/files" }}
+      volumes:
+        - name: store
+          {{- if and .Values.persistence.store.enabled .Values.persistence.store.hostPath }}
+          hostPath:
+            path: {{ .Values.persistence.store.hostPath }}
+            type: DirectoryOrCreate
+          {{- else if .Values.persistence.store.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pesitwizard-client.fullname" . }}-store
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: data
+          {{- if and .Values.persistence.data.enabled .Values.persistence.data.hostPath }}
+          hostPath:
+            path: {{ .Values.persistence.data.hostPath }}
+            type: DirectoryOrCreate
+          {{- else if .Values.persistence.data.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "pesitwizard-client.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

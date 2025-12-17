@@ -1,0 +1,37 @@
+{{- if and .Values.persistence.store.enabled (not .Values.persistence.store.hostPath) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pesitwizard-client.fullname" . }}-store
+  labels:
+    {{- include "pesitwizard-client.labels" . | nindent 4 }}
+    app.kubernetes.io/component: store
+spec:
+  accessModes:
+    - {{ .Values.persistence.store.accessMode }}
+  {{- if .Values.persistence.store.storageClass }}
+  storageClassName: {{ .Values.persistence.store.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.store.size }}
+{{- end }}
+---
+{{- if and .Values.persistence.data.enabled (not .Values.persistence.data.hostPath) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "pesitwizard-client.fullname" . }}-data
+  labels:
+    {{- include "pesitwizard-client.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data
+spec:
+  accessModes:
+    - {{ .Values.persistence.data.accessMode }}
+  {{- if .Values.persistence.data.storageClass }}
+  storageClassName: {{ .Values.persistence.data.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.data.size }}
+{{- end }}

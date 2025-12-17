@@ -1,0 +1,95 @@
+# Vectis Client Helm Chart Values
+
+# API Backend
+api:
+  replicaCount: 1
+  
+  image:
+    repository: ghcr.io/cpoder/pesitwizard/pesitwizard-client
+    tag: latest
+    pullPolicy: Always
+  
+  service:
+    type: ClusterIP
+    port: 8080
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Web UI
+ui:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: ghcr.io/cpoder/pesitwizard/pesitwizard-client-ui
+    tag: latest
+    pullPolicy: Always
+  
+  service:
+    type: ClusterIP
+    port: 80
+    nodePort: ""  # Set to use NodePort (e.g., 30080)
+  
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "200m"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: ""  # Empty for default (traefik on k3s)
+  annotations: {}
+  hosts:
+    - host: pesitwizard.local
+  tls: []
+
+# Persistence configuration
+persistence:
+  # Database storage (H2 database files)
+  store:
+    enabled: true
+    # Use hostPath for local development (e.g., /home/user/pesitwizard-store)
+    hostPath: ""
+    # PVC settings (used when hostPath is empty)
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    # Mount path inside container
+    mountPath: /app/data
+  
+  # Data storage (files to transfer)
+  data:
+    enabled: true
+    # Use hostPath for local development (e.g., /home/user/pesitwizard-data)
+    hostPath: ""
+    # PVC settings (used when hostPath is empty)
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    # Mount path inside container
+    mountPath: /app/files
+
+# Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}

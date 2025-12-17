@@ -1,12 +1,12 @@
 #!/bin/bash
 # Vectis Server Installation Script (Standalone)
-# Usage: curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-server.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/cpoder/pesitwizard/main/scripts/install-server.sh | bash
 
 set -e
 
-VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-vectis}"
-GITHUB_REPO="cpoder/vectis"
-HELM_CHART_PATH="vectis-helm-charts/vectis-server"
+VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-pesitwizard}"
+GITHUB_REPO="cpoder/pesitwizard"
+HELM_CHART_PATH="pesitwizard-helm-charts/pesitwizard-server"
 HELM_CHART_BRANCH="${VECTIS_VERSION:-main}"
 
 # Colors
@@ -82,7 +82,7 @@ install_helm() {
     
     # Install or upgrade using local chart
     echo -e "${YELLOW}Installing Helm chart...${NC}"
-    helm upgrade --install vectis-server "$CHART_DIR" \
+    helm upgrade --install pesitwizard-server "$CHART_DIR" \
         --namespace "$VECTIS_NAMESPACE"
     
     echo -e "${GREEN}✓ Helm release deployed${NC}"
@@ -90,7 +90,7 @@ install_helm() {
     echo -e "${YELLOW}Waiting for pods to be ready...${NC}"
     
     # Wait for deployments with progress feedback
-    DEPLOYMENTS=$(kubectl get deployments -n "$VECTIS_NAMESPACE" -l app.kubernetes.io/instance=vectis-server -o name 2>/dev/null || true)
+    DEPLOYMENTS=$(kubectl get deployments -n "$VECTIS_NAMESPACE" -l app.kubernetes.io/instance=pesitwizard-server -o name 2>/dev/null || true)
     
     if [ -n "$DEPLOYMENTS" ]; then
         for deploy in $DEPLOYMENTS; do
@@ -119,7 +119,7 @@ show_access_info() {
     echo "HTTP API port: 8080"
     echo ""
     echo "To expose the PeSIT port:"
-    echo "  kubectl port-forward svc/vectis-server 5000:5000 -n $VECTIS_NAMESPACE"
+    echo "  kubectl port-forward svc/pesitwizard-server 5000:5000 -n $VECTIS_NAMESPACE"
     echo ""
     echo "To check status:"
     echo "  kubectl get pods -n $VECTIS_NAMESPACE"
