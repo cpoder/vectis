@@ -4,7 +4,7 @@ Base URL : `http://localhost:8080`
 
 Authentification : Basic Auth (`admin:admin` par défaut)
 
-## Serveurs PeSIT Wizard
+## Serveurs PeSIT
 
 ### Liste des serveurs
 

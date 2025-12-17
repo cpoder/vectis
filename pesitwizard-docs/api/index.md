@@ -2,20 +2,18 @@
 
 ## Vue d'ensemble
 
-PeSIT Wizard Cloud expose trois APIs REST :
+PeSIT Wizard expose deux APIs REST :
 
-| API | Port | Description |
-|-----|------|-------------|
-| **Client API** | 9081 | Envoi/réception de fichiers |
-| **Admin API** | 9080 | Gestion des clusters |
-| **Server API** | 8080 | Configuration du serveur |
+| API | Port | Base URL | Description |
+|-----|------|----------|-------------|
+| **Client API** | 9081 | `/api/v1` | Envoi/réception de fichiers |
+| **Server API** | 8080 | `/api` | Configuration du serveur |
 
 ## Documentation interactive
 
 Chaque API expose une documentation Swagger/OpenAPI :
 
 - Client : http://localhost:9081/swagger-ui.html
-- Admin : http://localhost:9080/swagger-ui.html
 - Server : http://localhost:8080/swagger-ui.html
 
 ## Spécifications OpenAPI
@@ -23,7 +21,6 @@ Chaque API expose une documentation Swagger/OpenAPI :
 Les fichiers OAS (OpenAPI Specification) sont disponibles :
 
 - [Client API (OAS 3.0)](/api/openapi-client.yaml)
-- [Admin API (OAS 3.0)](/api/openapi-admin.yaml)
 - [Server API (OAS 3.0)](/api/openapi-server.yaml)
 
 ## Format des réponses

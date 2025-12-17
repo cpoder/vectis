@@ -1,13 +1,13 @@
 # Client API
 
-Base URL : `http://localhost:9081`
+Base URL : `http://localhost:9081/api/v1`
 
 ## Serveurs
 
 ### Liste des serveurs
 
 ```http
-GET /api/servers
+GET /api/v1/servers
 ```
 
 **Réponse** :
@@ -29,7 +29,7 @@ GET /api/servers
 ### Créer un serveur
 
 ```http
-POST /api/servers
+POST /api/v1/servers
 Content-Type: application/json
 
 {
@@ -46,7 +46,7 @@ Content-Type: application/json
 ### Modifier un serveur
 
 ```http
-PUT /api/servers/{id}
+PUT /api/v1/servers/{id}
 Content-Type: application/json
 
 {
@@ -58,13 +58,13 @@ Content-Type: application/json
 ### Supprimer un serveur
 
 ```http
-DELETE /api/servers/{id}
+DELETE /api/v1/servers/{id}
 ```
 
 ### Tester la connexion
 
 ```http
-POST /api/servers/{id}/test
+POST /api/v1/servers/{id}/test
 ```
 
 **Réponse** :
@@ -82,8 +82,8 @@ POST /api/servers/{id}/test
 ### Envoyer un fichier
 
 ```http
-POST /api/transfers/send
-Content-Type: multipart/form-data
+POST /api/v1/transfers/send
+Content-Type: application/json
 
 file: (binary)
 serverId: 1
@@ -109,7 +109,7 @@ virtualFile: VIREMENTS
 ### Recevoir un fichier
 
 ```http
-POST /api/transfers/receive
+POST /api/v1/transfers/receive
 Content-Type: application/json
 
 {
@@ -135,7 +135,7 @@ Content-Type: application/json
 ### Télécharger un fichier reçu
 
 ```http
-GET /api/transfers/{id}/download
+GET /api/v1/transfers/{id}
 ```
 
 Retourne le fichier binaire avec les headers appropriés.
@@ -143,7 +143,7 @@ Retourne le fichier binaire avec les headers appropriés.
 ### Liste des transferts
 
 ```http
-GET /api/transfers?page=0&size=20
+GET /api/v1/transfers/history?page=0&size=20
 ```
 
 **Query parameters** :
@@ -183,13 +183,19 @@ GET /api/transfers?page=0&size=20
 ### Détail d'un transfert
 
 ```http
-GET /api/transfers/{id}
+GET /api/v1/transfers/{id}
 ```
 
-### Annuler un transfert
+### Rejouer un transfert
 
 ```http
-POST /api/transfers/{id}/cancel
+POST /api/v1/transfers/{id}/replay
+```
+
+### Statistiques
+
+```http
+GET /api/v1/transfers/stats
 ```
 
 ## Statuts de transfert
