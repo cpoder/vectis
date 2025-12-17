@@ -33,10 +33,18 @@ jobs:
         run: npm run build
         working-directory: pesitwizard-docs
 
+      - name: Create Cloudflare Pages project if not exists
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create pesitwizard-docs --production-branch=main
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .vitepress/dist --project-name=pesitwizard-docs
+          command: pages deploy .vitepress/dist --project-name=pesitwizard-docs --commit-dirty=true
           workingDirectory: pesitwizard-docs
