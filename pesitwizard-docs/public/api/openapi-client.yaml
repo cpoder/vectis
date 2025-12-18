@@ -171,15 +171,18 @@ paths:
                 serverId:
                   type: integer
                   description: ID du serveur cible
-                remoteFilename:
-                  type: string
-                  description: Nom du fichier sur le serveur
                 partnerId:
                   type: string
-                  description: Identifiant partenaire
+                  description: Identifiant partenaire (PI 3 DEMANDEUR)
+                password:
+                  type: string
+                  description: Mot de passe d'authentification (PI 5)
+                remoteFilename:
+                  type: string
+                  description: Nom du fichier distant (PI 12)
                 virtualFile:
                   type: string
-                  description: Identifiant du fichier virtuel
+                  description: Identifiant du fichier virtuel (optionnel)
       responses:
         '200':
           description: Transfert effectué
@@ -264,8 +267,7 @@ components:
           type: integer
         serverId:
           type: string
-        clientId:
-          type: string
+          description: Identifiant du serveur PeSIT (PI 4)
         tlsEnabled:
           type: boolean
         status:
@@ -279,21 +281,20 @@ components:
         - host
         - port
         - serverId
-        - clientId
       properties:
         name:
           type: string
+          description: Nom du serveur (pour affichage)
         host:
           type: string
+          description: Adresse IP ou hostname du serveur
         port:
           type: integer
           default: 5000
+          description: Port PeSIT (défaut 5000)
         serverId:
           type: string
-        clientId:
-          type: string
-        password:
-          type: string
+          description: Identifiant du serveur PeSIT (PI 4)
         tlsEnabled:
           type: boolean
           default: false
@@ -386,9 +387,19 @@ components:
       properties:
         serverId:
           type: integer
-        remoteFilename:
-          type: string
+          description: ID du serveur cible
         partnerId:
           type: string
+          description: Identifiant partenaire (PI 3 DEMANDEUR)
+        password:
+          type: string
+          description: Mot de passe d'authentification (PI 5)
+        remoteFilename:
+          type: string
+          description: Nom du fichier distant (PI 12)
         virtualFile:
           type: string
+          description: Identifiant du fichier virtuel (optionnel)
+        filename:
+          type: string
+          description: Chemin local de destination
