@@ -2,10 +2,10 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.pesitwizard.connector</groupId>
-  <artifactId>pesitwizard-connector-s3</artifactId>
-  <name>Vectis S3 Connector</name>
+  <artifactId>pesitwizard-connector-sftp</artifactId>
+  <name>Vectis SFTP Connector</name>
   <version>1.0.0</version>
-  <description>AWS S3 / MinIO storage connector for Vectis</description>
+  <description>SFTP storage connector for Vectis</description>
   <build>
     <plugins>
       <plugin>
@@ -24,8 +24,7 @@
             <configuration>
               <artifactSet>
                 <includes>
-                  <include>software.amazon.awssdk:*</include>
-                  <include>org.reactivestreams:*</include>
+                  <include>com.jcraft:jsch</include>
                 </includes>
               </artifactSet>
             </configuration>
