@@ -40,6 +40,7 @@ public class PesitServerManager implements ClusterEventListener {
     private final PesitServerConfigRepository configRepository;
     private final ClusterProvider clusterProvider;
     private final PesitSessionHandler sessionHandler;
+    private final FileSystemService fileSystemService;
 
     // Map of running server instances: serverId -> PesitServerInstance
     private final Map<String, PesitServerInstance> runningServers = new ConcurrentHashMap<>();
@@ -213,6 +214,9 @@ public class PesitServerManager implements ClusterEventListener {
             // Create properties from config
             PesitServerProperties properties = createPropertiesFromConfig(config);
 
+            // Validate directories before starting
+            validateServerDirectories(config);
+
             // Use injected session handler (Spring-managed with all dependencies)
             // Create and start server instance
             PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler);
@@ -329,6 +333,35 @@ public class PesitServerManager implements ClusterEventListener {
                 .filter(PesitServerInstance::isRunning)
                 .mapToInt(PesitServerInstance::getActiveConnections)
                 .sum();
+    }
+
+    /**
+     * Validate server directories before starting.
+     * Checks that receive and send directories are accessible.
+     */
+    private void validateServerDirectories(PesitServerConfig config) {
+        String serverDesc = "Server '" + config.getServerId() + "'";
+
+        // Validate receive directory
+        if (config.getReceiveDirectory() != null && !config.getReceiveDirectory().isBlank()) {
+            var result = fileSystemService.validateReceiveDirectory(
+                    config.getReceiveDirectory(), serverDesc);
+            if (!result.success()) {
+                throw new IllegalStateException(result.errorMessage());
+            }
+        }
+
+        // Validate send directory (only if configured)
+        if (config.getSendDirectory() != null && !config.getSendDirectory().isBlank()) {
+            var result = fileSystemService.validateSendDirectory(
+                    config.getSendDirectory(), serverDesc);
+            if (!result.success()) {
+                log.warn("{}: send directory validation failed: {}", serverDesc, result.errorMessage());
+                // Don't fail startup for send directory - it may not be needed
+            }
+        }
+
+        log.info("{}: directory validation completed", serverDesc);
     }
 
     /**

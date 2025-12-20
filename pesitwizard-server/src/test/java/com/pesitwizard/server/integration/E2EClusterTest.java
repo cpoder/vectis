@@ -299,8 +299,9 @@ public class E2EClusterTest {
         ConfigService configService = mock(ConfigService.class);
         TransferTracker transferTracker = mock(TransferTracker.class);
         PathPlaceholderService pathPlaceholderService = new PathPlaceholderService();
+        com.pesitwizard.server.service.FileSystemService fileSystemService = new com.pesitwizard.server.service.FileSystemService();
         PesitSessionHandler sessionHandler = new PesitSessionHandler(properties, configService, transferTracker,
-                pathPlaceholderService);
+                pathPlaceholderService, fileSystemService);
         PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler);
         instance.start();
 

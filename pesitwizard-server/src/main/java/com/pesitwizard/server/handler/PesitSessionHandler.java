@@ -27,6 +27,7 @@ import com.pesitwizard.server.model.SessionContext;
 import com.pesitwizard.server.model.TransferContext;
 import com.pesitwizard.server.model.ValidationResult;
 import com.pesitwizard.server.service.ConfigService;
+import com.pesitwizard.server.service.FileSystemService;
 import com.pesitwizard.server.service.FpduResponseBuilder;
 import com.pesitwizard.server.service.PathPlaceholderService;
 import com.pesitwizard.server.service.TransferTracker;
@@ -48,6 +49,7 @@ public class PesitSessionHandler {
     private final ConfigService configService;
     private final TransferTracker transferTracker;
     private final PathPlaceholderService placeholderService;
+    private final FileSystemService fileSystemService;
 
     /**
      * Create a new session context
@@ -463,7 +465,8 @@ public class PesitSessionHandler {
 
         LogicalFileConfig fileConfig = ctx.getLogicalFileConfig();
         if (fileConfig != null && fileConfig.getReceiveDirectory() != null) {
-            receiveDir = Paths.get(fileConfig.getReceiveDirectory());
+            // Normalize the path to remove artifacts like "./" and ensure absolute path
+            receiveDir = fileSystemService.normalizePath(fileConfig.getReceiveDirectory());
             // Use PathPlaceholderService for full placeholder support including partner
             localFilename = placeholderService.resolvePath(
                     fileConfig.getReceiveFilenamePattern(),
@@ -474,24 +477,22 @@ public class PesitSessionHandler {
                             .direction("RECEIVE")
                             .build());
         } else {
-            receiveDir = Paths.get(properties.getReceiveDirectory());
+            receiveDir = fileSystemService.normalizePath(properties.getReceiveDirectory());
             localFilename = (transfer.getFilename() != null ? transfer.getFilename()
                     : "transfer_" + transfer.getTransferId())
                     + "_" + System.currentTimeMillis();
         }
 
-        try {
-            Files.createDirectories(receiveDir);
-        } catch (java.nio.file.AccessDeniedException e) {
-            log.error("[{}] Access denied to receive directory '{}': {}",
-                    ctx.getSessionId(), receiveDir, e.getMessage());
-            return FpduResponseBuilder.buildAbort(ctx, DiagnosticCode.D2_211,
-                    "Access denied to receive directory: " + receiveDir);
-        } catch (java.io.IOException e) {
-            log.error("[{}] Cannot create receive directory '{}': {}",
-                    ctx.getSessionId(), receiveDir, e.getMessage());
-            return FpduResponseBuilder.buildAbort(ctx, DiagnosticCode.D2_211,
-                    "Cannot create receive directory: " + e.getMessage());
+        // Create receive directory with proper error handling
+        var createResult = fileSystemService.createDirectories(receiveDir);
+        if (!createResult.success()) {
+            String errorDetail = String.format("Cannot access receive directory '%s': %s (permissions: %s)",
+                    receiveDir, createResult.errorMessage(),
+                    fileSystemService.getPermissionString(receiveDir.getParent()));
+            log.error("[{}] {}", ctx.getSessionId(), errorDetail);
+
+            DiagnosticCode diagCode = DiagnosticCode.D2_211; // File open impossible
+            return FpduResponseBuilder.buildAbort(ctx, diagCode, errorDetail);
         }
         transfer.setLocalPath(receiveDir.resolve(localFilename));
 
