@@ -52,8 +52,7 @@
 
     <!-- Group membership protocol -->
     <pbcast.GMS print_local_addr="true"
-                join_timeout="3000"
-                view_bundling="true"/>
+                join_timeout="3000"/>
 
     <!-- Flow control -->
     <UFC max_credits="2M"
