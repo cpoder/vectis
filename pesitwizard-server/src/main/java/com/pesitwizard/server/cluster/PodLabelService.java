@@ -54,10 +54,17 @@ public class PodLabelService implements ClusterEventListener {
             clusterProvider.addListener(this);
             log.info("Pod label service initialized for pod {} in namespace {}", podName, namespace);
 
+            // Clear stale leader label first, then set if we're actually leader
+            // This prevents stale labels from previous runs where cluster mode wasn't
+            // working
+            updateLeaderLabel(false);
+
             // Check if we're already the leader (in case we missed the event)
             if (clusterProvider.isLeader()) {
                 log.info("Already leader at init time, adding leader label");
                 updateLeaderLabel(true);
+            } else {
+                log.info("Not leader at init time, leader label cleared");
             }
         } catch (Exception e) {
             log.warn("Could not initialize Kubernetes client: {}. Pod label updates disabled.", e.getMessage());
