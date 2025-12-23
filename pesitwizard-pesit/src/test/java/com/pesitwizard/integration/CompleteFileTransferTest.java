@@ -33,7 +33,7 @@ public class CompleteFileTransferTest {
         private static final String TEST_HOST = System.getProperty("pesit.test.host", "localhost");
         private static final int TEST_PORT = Integer.parseInt(System.getProperty("pesit.test.port", "5000"));
         private static final boolean INTEGRATION_ENABLED = Boolean.parseBoolean(
-                        System.getProperty("pesit.integration.enabled", "true"));
+                        System.getProperty("pesit.integration.enabled", "false"));
 
         @BeforeAll
         void setUp() {
