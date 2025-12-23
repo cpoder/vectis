@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>PeSIT Wizard Client</name>
-    <description>PeSIT Wizard file transfer client application</description>
+    <description>PeSIT file transfer client application</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
