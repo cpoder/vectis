@@ -1,0 +1,136 @@
+package com.pesitwizard.server.model;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.nio.file.Path;
+import java.time.Instant;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+@DisplayName("TransferContext Tests")
+class TransferContextTest {
+
+    private TransferContext context;
+
+    @BeforeEach
+    void setUp() {
+        context = new TransferContext();
+    }
+
+    @Test
+    @DisplayName("should append data and track bytes")
+    void shouldAppendDataAndTrackBytes() {
+        byte[] data1 = "Hello ".getBytes();
+        byte[] data2 = "World!".getBytes();
+
+        context.appendData(data1);
+        assertEquals(data1.length, context.getBytesTransferred());
+        assertEquals(1, context.getRecordsTransferred());
+
+        context.appendData(data2);
+        assertEquals(data1.length + data2.length, context.getBytesTransferred());
+        assertEquals(2, context.getRecordsTransferred());
+    }
+
+    @Test
+    @DisplayName("should get accumulated data")
+    void shouldGetAccumulatedData() {
+        context.appendData("Hello ".getBytes());
+        context.appendData("World!".getBytes());
+
+        byte[] result = context.getData();
+        assertEquals("Hello World!", new String(result));
+    }
+
+    @Test
+    @DisplayName("should reset all fields")
+    void shouldResetAllFields() {
+        // Set some values
+        context.setTransferId(123);
+        context.setFilename("test.txt");
+        context.setLocalPath(Path.of("/tmp/test.txt"));
+        context.setPriority(5);
+        context.setWriteMode(true);
+        context.setRestart(true);
+        context.setStartTime(Instant.now());
+        context.appendData("test data".getBytes());
+
+        // Reset
+        context.reset();
+
+        // Verify all fields are reset
+        assertEquals(0, context.getTransferId());
+        assertNull(context.getFilename());
+        assertNull(context.getLocalPath());
+        assertEquals(0, context.getPriority());
+        assertFalse(context.isWriteMode());
+        assertFalse(context.isRestart());
+        assertNull(context.getStartTime());
+        assertEquals(0, context.getBytesTransferred());
+        assertEquals(0, context.getRecordsTransferred());
+        assertEquals(0, context.getData().length);
+    }
+
+    @Test
+    @DisplayName("should store transfer attributes")
+    void shouldStoreTransferAttributes() {
+        context.setTransferId(42);
+        context.setFileType(1);
+        context.setFilename("DATA.DAT");
+        context.setLocalPath(Path.of("/data/received/DATA.DAT"));
+        context.setPriority(3);
+        context.setDataCode(2); // BINARY
+        context.setRecordFormat(1); // Variable
+        context.setRecordLength(1024);
+        context.setFileOrganization(0);
+        context.setMaxEntitySize(32768);
+        context.setCompression(0);
+        context.setWriteMode(true);
+        context.setRestart(false);
+        context.setRestartPoint(0);
+        context.setCurrentSyncPoint(5);
+        context.setStartTime(Instant.now());
+        context.setClientId("CLIENT1");
+        context.setBankId("BANK1");
+
+        assertEquals(42, context.getTransferId());
+        assertEquals(1, context.getFileType());
+        assertEquals("DATA.DAT", context.getFilename());
+        assertEquals(Path.of("/data/received/DATA.DAT"), context.getLocalPath());
+        assertEquals(3, context.getPriority());
+        assertEquals(2, context.getDataCode());
+        assertEquals(1, context.getRecordFormat());
+        assertEquals(1024, context.getRecordLength());
+        assertEquals(0, context.getFileOrganization());
+        assertEquals(32768, context.getMaxEntitySize());
+        assertEquals(0, context.getCompression());
+        assertTrue(context.isWriteMode());
+        assertFalse(context.isRestart());
+        assertEquals(0, context.getRestartPoint());
+        assertEquals(5, context.getCurrentSyncPoint());
+        assertNotNull(context.getStartTime());
+        assertEquals("CLIENT1", context.getClientId());
+        assertEquals("BANK1", context.getBankId());
+    }
+
+    @Test
+    @DisplayName("should handle empty data append")
+    void shouldHandleEmptyDataAppend() {
+        context.appendData(new byte[0]);
+        assertEquals(0, context.getBytesTransferred());
+        assertEquals(1, context.getRecordsTransferred()); // Still counts as a record
+    }
+
+    @Test
+    @DisplayName("should track end time")
+    void shouldTrackEndTime() {
+        assertNull(context.getEndTime());
+
+        Instant endTime = Instant.now();
+        context.setEndTime(endTime);
+
+        assertEquals(endTime, context.getEndTime());
+    }
+}
