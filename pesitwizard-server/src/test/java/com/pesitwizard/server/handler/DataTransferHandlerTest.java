@@ -298,4 +298,113 @@ class DataTransferHandlerTest {
         assertNull(response);
         assertEquals(6, transfer.getRecordsTransferred());
     }
+
+    @Test
+    @DisplayName("handleRead should return ABORT when no transfer context")
+    void handleReadShouldReturnAbortWhenNoTransfer() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+        // No transfer started
+
+        Fpdu fpdu = new Fpdu(FpduType.READ);
+
+        Fpdu response = handler.handleRead(ctx, fpdu, null);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleRead should return ABORT when local path is null")
+    void handleReadShouldReturnAbortWhenLocalPathNull() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+        TransferContext transfer = ctx.startTransfer();
+        transfer.setLocalPath(null);
+
+        Fpdu fpdu = new Fpdu(FpduType.READ);
+
+        Fpdu response = handler.handleRead(ctx, fpdu, null);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleRead should return ABORT when file does not exist")
+    void handleReadShouldReturnAbortWhenFileNotExists() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+        TransferContext transfer = ctx.startTransfer();
+        transfer.setLocalPath(java.nio.file.Path.of("/non/existent/file.txt"));
+
+        Fpdu fpdu = new Fpdu(FpduType.READ);
+
+        Fpdu response = handler.handleRead(ctx, fpdu, null);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleRead should stream file and return null on success")
+    void handleReadShouldStreamFileOnSuccess() throws Exception {
+        // Create temp file
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("test", ".dat");
+        java.nio.file.Files.writeString(tempFile, "Test content");
+
+        try {
+            SessionContext ctx = new SessionContext("test-session");
+            ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+            TransferContext transfer = ctx.startTransfer();
+            transfer.setLocalPath(tempFile);
+
+            when(properties.getMaxEntitySize()).thenReturn(4096);
+
+            Fpdu fpdu = new Fpdu(FpduType.READ);
+
+            // Create mock output stream
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            java.io.DataOutputStream out = new java.io.DataOutputStream(baos);
+
+            Fpdu response = handler.handleRead(ctx, fpdu, out);
+
+            assertNull(response); // Success returns null
+            assertEquals(ServerState.TDL02B_SENDING_DATA, ctx.getState());
+            assertTrue(transfer.getBytesTransferred() > 0);
+        } finally {
+            java.nio.file.Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    @DisplayName("handleRead should handle restart point")
+    void handleReadShouldHandleRestartPoint() throws Exception {
+        // Create temp file with content
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("test", ".dat");
+        java.nio.file.Files.writeString(tempFile, "Test content for restart");
+
+        try {
+            SessionContext ctx = new SessionContext("test-session");
+            ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+            TransferContext transfer = ctx.startTransfer();
+            transfer.setLocalPath(tempFile);
+
+            when(properties.getMaxEntitySize()).thenReturn(4096);
+
+            // Add restart point parameter
+            Fpdu fpdu = new Fpdu(FpduType.READ);
+            fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_18_POINT_RELANCE, 5));
+
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            java.io.DataOutputStream out = new java.io.DataOutputStream(baos);
+
+            Fpdu response = handler.handleRead(ctx, fpdu, out);
+
+            assertNull(response);
+            assertEquals(5, transfer.getRestartPoint());
+        } finally {
+            java.nio.file.Files.deleteIfExists(tempFile);
+        }
+    }
 }
