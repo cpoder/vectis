@@ -189,4 +189,101 @@ class MessageHandlerTest {
         assertNotNull(response);
         assertEquals(FpduType.ABORT, response.getFpduType());
     }
+
+    @Test
+    @DisplayName("handleMsg should handle long message correctly")
+    void handleMsgShouldHandleLongMessage() {
+        SessionContext ctx = new SessionContext("test-session");
+        Fpdu fpdu = new Fpdu(FpduType.MSG);
+
+        // Create message longer than 100 chars to test truncation in logging
+        String longMessage = "A".repeat(150);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_91_MESSAGE, longMessage.getBytes()));
+
+        Fpdu response = handler.handleMsg(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_MSG, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleMsgDm should handle message without PI_91")
+    void handleMsgDmShouldHandleMessageWithoutPi91() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGDM);
+        // No PI_91 parameter
+
+        Fpdu response = handler.handleMsgDm(ctx, fpdu);
+
+        assertNull(response);
+        assertEquals(ServerState.MSG_RECEIVING, ctx.getState());
+        assertNotNull(ctx.getMessageBuffer());
+        assertEquals(0, ctx.getMessageBuffer().length());
+    }
+
+    @Test
+    @DisplayName("handleMsgMm should handle message without PI_91")
+    void handleMsgMmShouldHandleMessageWithoutPi91() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.setMessageBuffer(new StringBuilder("Initial"));
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGMM);
+        // No PI_91 parameter
+
+        Fpdu response = handler.handleMsgMm(ctx, fpdu);
+
+        assertNull(response);
+        assertEquals("Initial", ctx.getMessageBuffer().toString());
+    }
+
+    @Test
+    @DisplayName("handleMsgFm should handle message without PI_91")
+    void handleMsgFmShouldHandleMessageWithoutPi91() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.MSG_RECEIVING);
+        ctx.setMessageBuffer(new StringBuilder("Content"));
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGFM);
+        // No PI_91 parameter
+
+        Fpdu response = handler.handleMsgFm(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_MSG, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleMsgFm should handle long complete message")
+    void handleMsgFmShouldHandleLongMessage() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.MSG_RECEIVING);
+        ctx.setMessageBuffer(new StringBuilder("A".repeat(150)));
+        ctx.setMessageFilename("testfile.dat");
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGFM);
+
+        Fpdu response = handler.handleMsgFm(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_MSG, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleMsg should handle PGI_09 without PI_12")
+    void handleMsgShouldHandlePgi09WithoutPi12() {
+        SessionContext ctx = new SessionContext("test-session");
+        Fpdu fpdu = new Fpdu(FpduType.MSG);
+
+        // Create PGI_09 with PI_11 but not PI_12
+        ParameterValue pgi9 = new ParameterValue(ParameterGroupIdentifier.PGI_09_ID_FICHIER,
+                new ParameterValue(ParameterIdentifier.PI_11_TYPE_FICHIER, 0));
+        fpdu.withParameter(pgi9);
+
+        Fpdu response = handler.handleMsg(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_MSG, response.getFpduType());
+    }
 }
