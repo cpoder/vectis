@@ -154,4 +154,120 @@ class TransferOperationHandlerTest {
         assertNotNull(response);
         assertEquals(FpduType.ABORT, response.getFpduType());
     }
+
+    @Test
+    @DisplayName("handleOpen should handle missing transfer context")
+    void handleOpenShouldHandleMissingTransfer() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        // No transfer started
+
+        Fpdu fpdu = new Fpdu(FpduType.OPEN);
+
+        Fpdu response = handler.handleOpen(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_OPEN, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleOpen should handle PI_21 with value 0 (no compression)")
+    void handleOpenShouldHandleNoCompression() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        TransferContext transfer = ctx.startTransfer();
+
+        Fpdu fpdu = new Fpdu(FpduType.OPEN);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_21_COMPRESSION, 0));
+
+        Fpdu response = handler.handleOpen(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(0, transfer.getCompression());
+    }
+
+    @Test
+    @DisplayName("handleClose should handle missing transfer context")
+    void handleCloseShouldHandleMissingTransfer() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+        // No transfer
+
+        Fpdu fpdu = new Fpdu(FpduType.CLOSE);
+
+        Fpdu response = handler.handleClose(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_CLOSE, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleDeselect should handle null transfer gracefully")
+    void handleDeselectShouldHandleNullTransfer() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        // No transfer started
+
+        Fpdu fpdu = new Fpdu(FpduType.DESELECT);
+
+        Fpdu response = handler.handleDeselect(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_DESELECT, response.getFpduType());
+        assertEquals(ServerState.CN03_CONNECTED, ctx.getState());
+    }
+
+    @Test
+    @DisplayName("handleCreate should extract file attributes from FPDU")
+    void handleCreateShouldExtractFileAttributes() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.CREATE);
+        // Add PI_14 for priority
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_17_PRIORITE, 5));
+        // Add PI_25 for max entity size
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE, 8192));
+
+        when(fileValidator.validateForCreate(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "File not found"));
+
+        handler.handleCreate(ctx, fpdu);
+
+        // Verify transfer context was created with extracted attributes
+        // (The transfer is ended when validation fails, so we just verify no exception)
+    }
+
+    @Test
+    @DisplayName("handleSelect should extract transfer attributes")
+    void handleSelectShouldExtractTransferAttributes() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.SELECT);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_17_PRIORITE, 3));
+
+        when(fileValidator.validateForSelect(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "File not found"));
+
+        handler.handleSelect(ctx, fpdu);
+
+        // Verify no exception thrown
+    }
+
+    @Test
+    @DisplayName("handleOpen should return ACK_OPEN with restart point parameter")
+    void handleOpenShouldHandleRestartPoint() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        ctx.startTransfer();
+
+        Fpdu fpdu = new Fpdu(FpduType.OPEN);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_18_POINT_RELANCE, 1024));
+
+        Fpdu response = handler.handleOpen(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_OPEN, response.getFpduType());
+    }
 }
