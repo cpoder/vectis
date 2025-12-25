@@ -1,0 +1,157 @@
+package com.pesitwizard.server.handler;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.nio.file.Path;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.pesitwizard.fpdu.Fpdu;
+import com.pesitwizard.fpdu.FpduType;
+import com.pesitwizard.fpdu.ParameterIdentifier;
+import com.pesitwizard.fpdu.ParameterValue;
+import com.pesitwizard.server.config.PesitServerProperties;
+import com.pesitwizard.server.model.SessionContext;
+import com.pesitwizard.server.model.TransferContext;
+import com.pesitwizard.server.model.ValidationResult;
+import com.pesitwizard.server.service.FileSystemService;
+import com.pesitwizard.server.service.PathPlaceholderService;
+import com.pesitwizard.server.service.TransferTracker;
+import com.pesitwizard.server.state.ServerState;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("TransferOperationHandler Tests")
+class TransferOperationHandlerTest {
+
+    @Mock
+    private PesitServerProperties properties;
+
+    @Mock
+    private FileValidator fileValidator;
+
+    @Mock
+    private TransferTracker transferTracker;
+
+    @Mock
+    private PathPlaceholderService placeholderService;
+
+    @Mock
+    private FileSystemService fileSystemService;
+
+    private TransferOperationHandler handler;
+
+    @TempDir
+    Path tempDir;
+
+    @BeforeEach
+    void setUp() {
+        handler = new TransferOperationHandler(properties, fileValidator, transferTracker,
+                placeholderService, fileSystemService);
+    }
+
+    @Test
+    @DisplayName("handleOpen should transition to transfer ready state")
+    void handleOpenShouldTransitionToTransferReady() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        ctx.startTransfer();
+
+        Fpdu fpdu = new Fpdu(FpduType.OPEN);
+
+        Fpdu response = handler.handleOpen(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_OPEN, response.getFpduType());
+        assertEquals(ServerState.OF02_TRANSFER_READY, ctx.getState());
+    }
+
+    @Test
+    @DisplayName("handleOpen should extract compression from PI_21")
+    void handleOpenShouldExtractCompression() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        TransferContext transfer = ctx.startTransfer();
+
+        Fpdu fpdu = new Fpdu(FpduType.OPEN);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_21_COMPRESSION, 1));
+
+        Fpdu response = handler.handleOpen(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(1, transfer.getCompression());
+    }
+
+    @Test
+    @DisplayName("handleClose should transition to file selected state")
+    void handleCloseShouldTransitionToFileSelected() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+
+        Fpdu fpdu = new Fpdu(FpduType.CLOSE);
+
+        Fpdu response = handler.handleClose(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_CLOSE, response.getFpduType());
+        assertEquals(ServerState.SF03_FILE_SELECTED, ctx.getState());
+    }
+
+    @Test
+    @DisplayName("handleDeselect should end transfer and transition to connected state")
+    void handleDeselectShouldEndTransferAndTransition() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        ctx.startTransfer();
+
+        Fpdu fpdu = new Fpdu(FpduType.DESELECT);
+
+        Fpdu response = handler.handleDeselect(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_DESELECT, response.getFpduType());
+        assertEquals(ServerState.CN03_CONNECTED, ctx.getState());
+        assertNull(ctx.getCurrentTransfer());
+    }
+
+    @Test
+    @DisplayName("handleCreate should return ABORT when file validation fails")
+    void handleCreateShouldReturnAbortWhenValidationFails() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.CREATE);
+
+        when(fileValidator.validateForCreate(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "File not found"));
+
+        Fpdu response = handler.handleCreate(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleSelect should return ABORT when file validation fails")
+    void handleSelectShouldReturnAbortWhenValidationFails() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.SELECT);
+
+        when(fileValidator.validateForSelect(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "File not found"));
+
+        Fpdu response = handler.handleSelect(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+}
