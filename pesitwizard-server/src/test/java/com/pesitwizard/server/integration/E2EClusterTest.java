@@ -26,7 +26,12 @@ import com.pesitwizard.fpdu.FpduType;
 import com.pesitwizard.fpdu.ParameterValue;
 import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.entity.PesitServerConfig;
+import com.pesitwizard.server.handler.ConnectionValidator;
+import com.pesitwizard.server.handler.DataTransferHandler;
+import com.pesitwizard.server.handler.FileValidator;
+import com.pesitwizard.server.handler.MessageHandler;
 import com.pesitwizard.server.handler.PesitSessionHandler;
+import com.pesitwizard.server.handler.TransferOperationHandler;
 import com.pesitwizard.server.service.ConfigService;
 import com.pesitwizard.server.service.PathPlaceholderService;
 import com.pesitwizard.server.service.PesitServerInstance;
@@ -300,8 +305,17 @@ public class E2EClusterTest {
         TransferTracker transferTracker = mock(TransferTracker.class);
         PathPlaceholderService pathPlaceholderService = new PathPlaceholderService();
         com.pesitwizard.server.service.FileSystemService fileSystemService = new com.pesitwizard.server.service.FileSystemService();
-        PesitSessionHandler sessionHandler = new PesitSessionHandler(properties, configService, transferTracker,
-                pathPlaceholderService, fileSystemService);
+
+        // Create split handler components
+        ConnectionValidator connectionValidator = new ConnectionValidator(properties, configService);
+        FileValidator fileValidator = new FileValidator(properties, configService);
+        TransferOperationHandler transferOperationHandler = new TransferOperationHandler(
+                properties, fileValidator, transferTracker, pathPlaceholderService, fileSystemService);
+        DataTransferHandler dataTransferHandler = new DataTransferHandler(properties, transferTracker);
+        MessageHandler messageHandler = new MessageHandler();
+
+        PesitSessionHandler sessionHandler = new PesitSessionHandler(properties, connectionValidator,
+                transferOperationHandler, dataTransferHandler, messageHandler, transferTracker);
         PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler);
         instance.start();
 
