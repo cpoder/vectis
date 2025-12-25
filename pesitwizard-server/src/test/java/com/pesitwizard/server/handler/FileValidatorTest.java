@@ -252,6 +252,152 @@ class FileValidatorTest {
         assertTrue(result.isValid());
     }
 
+    @Test
+    @DisplayName("validateForCreate should use YAML config when database has no entry")
+    void validateForCreateShouldUseYamlConfig() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.empty());
+
+        LogicalFileConfig yamlConfig = LogicalFileConfig.builder()
+                .id("FILE1")
+                .enabled(true)
+                .direction(LogicalFileConfig.Direction.RECEIVE)
+                .build();
+        when(properties.getLogicalFile("FILE1")).thenReturn(yamlConfig);
+
+        ValidationResult result = validator.validateForCreate(ctx, transfer);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    @DisplayName("validateForCreate should return error for disabled YAML config file")
+    void validateForCreateShouldReturnErrorForDisabledYamlFile() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.empty());
+
+        LogicalFileConfig yamlConfig = LogicalFileConfig.builder()
+                .id("FILE1")
+                .enabled(false)
+                .direction(LogicalFileConfig.Direction.RECEIVE)
+                .build();
+        when(properties.getLogicalFile("FILE1")).thenReturn(yamlConfig);
+
+        ValidationResult result = validator.validateForCreate(ctx, transfer);
+
+        assertFalse(result.isValid());
+        assertEquals(DiagnosticCode.D2_205, result.getDiagCode());
+    }
+
+    @Test
+    @DisplayName("validateForSelect should return error for disabled YAML config file")
+    void validateForSelectShouldReturnErrorForDisabledYamlFile() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.empty());
+
+        LogicalFileConfig yamlConfig = LogicalFileConfig.builder()
+                .id("FILE1")
+                .enabled(false)
+                .direction(LogicalFileConfig.Direction.SEND)
+                .build();
+        when(properties.getLogicalFile("FILE1")).thenReturn(yamlConfig);
+
+        ValidationResult result = validator.validateForSelect(ctx, transfer);
+
+        assertFalse(result.isValid());
+        assertEquals(DiagnosticCode.D2_205, result.getDiagCode());
+    }
+
+    @Test
+    @DisplayName("validateForCreate should allow partner with matching allowed file")
+    void validateForCreateShouldAllowPartnerWithMatchingFile() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        PartnerConfig partner = new PartnerConfig();
+        partner.setAllowedFiles(new String[] { "FILE1", "FILE2" });
+        ctx.setPartnerConfig(partner);
+
+        VirtualFile vf = createVirtualFile("FILE1", true);
+        vf.setDirection(VirtualFile.Direction.RECEIVE);
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.of(vf));
+
+        ValidationResult result = validator.validateForCreate(ctx, transfer);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    @DisplayName("validateForSelect should return error when partner cannot access file")
+    void validateForSelectShouldReturnErrorWhenPartnerCannotAccessFile() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        PartnerConfig partner = new PartnerConfig();
+        partner.setAllowedFiles(new String[] { "OTHER_FILE" });
+        ctx.setPartnerConfig(partner);
+
+        VirtualFile vf = createVirtualFile("FILE1", true);
+        vf.setDirection(VirtualFile.Direction.SEND);
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.of(vf));
+
+        ValidationResult result = validator.validateForSelect(ctx, transfer);
+
+        assertFalse(result.isValid());
+        assertEquals(DiagnosticCode.D2_226, result.getDiagCode());
+    }
+
+    @Test
+    @DisplayName("validateForCreate should allow partner with empty allowed files list")
+    void validateForCreateShouldAllowPartnerWithEmptyAllowedFiles() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        PartnerConfig partner = new PartnerConfig();
+        partner.setAllowedFiles(new String[0]); // Empty list = all files allowed
+        ctx.setPartnerConfig(partner);
+
+        VirtualFile vf = createVirtualFile("FILE1", true);
+        vf.setDirection(VirtualFile.Direction.RECEIVE);
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.of(vf));
+
+        ValidationResult result = validator.validateForCreate(ctx, transfer);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    @DisplayName("validateForCreate should allow partner with null allowed files")
+    void validateForCreateShouldAllowPartnerWithNullAllowedFiles() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        PartnerConfig partner = new PartnerConfig();
+        partner.setAllowedFiles(null); // Null = all files allowed
+        ctx.setPartnerConfig(partner);
+
+        VirtualFile vf = createVirtualFile("FILE1", true);
+        vf.setDirection(VirtualFile.Direction.RECEIVE);
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.of(vf));
+
+        ValidationResult result = validator.validateForCreate(ctx, transfer);
+
+        assertTrue(result.isValid());
+    }
+
     private VirtualFile createVirtualFile(String id, boolean enabled) {
         VirtualFile vf = new VirtualFile();
         vf.setId(id);
