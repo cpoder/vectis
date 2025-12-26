@@ -337,4 +337,74 @@ class MessageHandlerTest {
         assertNotNull(ctx.getMessageBuffer());
         assertEquals("Start of message", ctx.getMessageBuffer().toString());
     }
+
+    @Test
+    @DisplayName("handleMsgFm should return ABORT when buffer is null")
+    void handleMsgFmShouldReturnAbortWhenBufferNull() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.MSG_RECEIVING);
+        ctx.setMessageBuffer(null); // No buffer initialized
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGFM);
+
+        Fpdu response = handler.handleMsgFm(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleMsgFm should complete message and return ACK_MSG")
+    void handleMsgFmShouldCompleteMessage() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.MSG_RECEIVING);
+        ctx.setMessageBuffer(new StringBuilder("Initial message"));
+        ctx.setMessageFilename("test.dat");
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGFM);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_91_MESSAGE, " final part".getBytes()));
+
+        Fpdu response = handler.handleMsgFm(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ACK_MSG, response.getFpduType());
+        assertEquals(ServerState.CN03_CONNECTED, ctx.getState());
+        assertNull(ctx.getMessageBuffer()); // Buffer cleared after completion
+        assertNull(ctx.getMessageFilename()); // Filename cleared after completion
+    }
+
+    @Test
+    @DisplayName("handleMsgMm should return ABORT when buffer is null")
+    void handleMsgMmShouldReturnAbortWhenBufferNull() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.MSG_RECEIVING);
+        ctx.setMessageBuffer(null); // No buffer initialized
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGMM);
+
+        Fpdu response = handler.handleMsgMm(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
+    @Test
+    @DisplayName("handleMsgDm should extract filename from PGI_09")
+    void handleMsgDmShouldExtractFilename() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.MSGDM);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_91_MESSAGE, "Message content".getBytes()));
+
+        // Add PGI_09 with PI_12 for filename
+        ParameterValue pgi09 = new ParameterValue(ParameterGroupIdentifier.PGI_09_ID_FICHIER,
+                new ParameterValue(ParameterIdentifier.PI_12_NOM_FICHIER, "TESTFILE".getBytes()));
+        fpdu.withParameter(pgi09);
+
+        Fpdu response = handler.handleMsgDm(ctx, fpdu);
+
+        assertNull(response);
+        assertEquals("TESTFILE", ctx.getMessageFilename());
+    }
 }
