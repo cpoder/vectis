@@ -373,5 +373,37 @@ class FpduResponseBuilderTest {
 
             assertEquals(FpduType.ACK_SELECT, response.getFpduType());
         }
+
+        @Test
+        @DisplayName("should build ACK_TRANS_END with byte count and record count")
+        void shouldBuildAckTransEnd() {
+            Fpdu response = FpduResponseBuilder.buildAckTransEnd(sessionContext, 8192, 50);
+
+            assertEquals(FpduType.ACK_TRANS_END, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_WRITE")
+        void shouldBuildAckWrite() {
+            Fpdu response = FpduResponseBuilder.buildAckWrite(sessionContext, 0);
+
+            assertEquals(FpduType.ACK_WRITE, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_READ")
+        void shouldBuildAckRead() {
+            Fpdu response = FpduResponseBuilder.buildAckRead(sessionContext);
+
+            assertEquals(FpduType.ACK_READ, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build RELCONF")
+        void shouldBuildRelconf() {
+            Fpdu response = FpduResponseBuilder.buildRelconf(sessionContext);
+
+            assertEquals(FpduType.RELCONF, response.getFpduType());
+        }
     }
 }
