@@ -10,10 +10,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+
 import com.pesitwizard.server.config.PesitServerProperties;
+import com.pesitwizard.server.config.SslProperties;
 import com.pesitwizard.server.entity.PesitServerConfig;
 import com.pesitwizard.server.handler.PesitSessionHandler;
 import com.pesitwizard.server.handler.TcpConnectionHandler;
+import com.pesitwizard.server.ssl.SslContextFactory;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +35,8 @@ public class PesitServerInstance {
     private final PesitServerConfig config;
     private final PesitServerProperties properties;
     private final PesitSessionHandler sessionHandler;
+    private final SslProperties sslProperties;
+    private final SslContextFactory sslContextFactory;
 
     private ServerSocket serverSocket;
     private ExecutorService executorService;
@@ -38,10 +45,13 @@ public class PesitServerInstance {
     private final AtomicInteger activeConnections = new AtomicInteger(0);
 
     public PesitServerInstance(PesitServerConfig config, PesitServerProperties properties,
-            PesitSessionHandler sessionHandler) {
+            PesitSessionHandler sessionHandler, SslProperties sslProperties,
+            SslContextFactory sslContextFactory) {
         this.config = config;
         this.properties = properties;
         this.sessionHandler = sessionHandler;
+        this.sslProperties = sslProperties;
+        this.sslContextFactory = sslContextFactory;
     }
 
     /**
@@ -52,15 +62,65 @@ public class PesitServerInstance {
             throw new IllegalStateException("Server already running");
         }
 
-        serverSocket = new ServerSocket(properties.getPort());
+        serverSocket = createServerSocket();
         executorService = Executors.newFixedThreadPool(properties.getMaxConnections());
         running.set(true);
 
         acceptThread = new Thread(this::acceptConnections, "pesit-" + config.getServerId() + "-accept");
         acceptThread.start();
 
-        log.info("[{}] PeSIT Server started on port {} (Hors-SIT profile, TCP/IP)",
-                config.getServerId(), properties.getPort());
+        String protocol = sslProperties.isEnabled() ? "TLS" : "TCP/IP";
+        String authMode = sslProperties.isEnabled() ? " (mTLS: " + sslProperties.getClientAuth() + ")" : "";
+        log.info("[{}] PeSIT Server started on port {} (Hors-SIT profile, {}){}",
+                config.getServerId(), properties.getPort(), protocol, authMode);
+    }
+
+    /**
+     * Create server socket (plain or SSL based on configuration)
+     */
+    private ServerSocket createServerSocket() throws IOException {
+        if (!sslProperties.isEnabled()) {
+            return new ServerSocket(properties.getPort());
+        }
+
+        try {
+            SSLContext sslContext = sslContextFactory.createSslContext(
+                    sslProperties.getKeystoreName(),
+                    sslProperties.getTruststoreName());
+
+            SSLServerSocket sslServerSocket = (SSLServerSocket) sslContext
+                    .getServerSocketFactory()
+                    .createServerSocket(properties.getPort());
+
+            // Configure client authentication (mTLS)
+            switch (sslProperties.getClientAuth()) {
+                case NEED:
+                    sslServerSocket.setNeedClientAuth(true);
+                    log.info("[{}] mTLS enabled: client certificate REQUIRED", config.getServerId());
+                    break;
+                case WANT:
+                    sslServerSocket.setWantClientAuth(true);
+                    log.info("[{}] mTLS enabled: client certificate REQUESTED", config.getServerId());
+                    break;
+                case NONE:
+                default:
+                    sslServerSocket.setNeedClientAuth(false);
+                    sslServerSocket.setWantClientAuth(false);
+                    log.info("[{}] TLS enabled: no client certificate required", config.getServerId());
+                    break;
+            }
+
+            // Configure cipher suites if specified
+            if (sslProperties.getCipherSuites() != null && !sslProperties.getCipherSuites().isEmpty()) {
+                sslServerSocket.setEnabledCipherSuites(
+                        sslProperties.getCipherSuites().toArray(new String[0]));
+            }
+
+            return sslServerSocket;
+
+        } catch (Exception e) {
+            throw new IOException("Failed to create SSL server socket: " + e.getMessage(), e);
+        }
     }
 
     /**

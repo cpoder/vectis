@@ -59,18 +59,51 @@ pesitwizard:
   
   # TLS/SSL Configuration
   ssl:
-    # Enable TLS for Vectis protocol
+    # Enable TLS for PeSIT protocol
     enabled: false
     # Keystore name (from database) - required if enabled
     keystore-name: default-keystore
-    # Truststore name (from database) - optional, for mutual TLS
-    truststore-name: default-truststore
-    # Require client certificate (mutual TLS)
-    client-auth: false
+    # Truststore name (from database) - required for mTLS
+    truststore-name: pesit-ca-truststore
+    # Client authentication mode for mTLS:
+    #   NONE - No client certificate required (TLS only)
+    #   WANT - Request client certificate but don't require it
+    #   NEED - Require valid client certificate (mandatory mTLS)
+    client-auth: NONE
     # TLS protocol version (TLSv1.2, TLSv1.3)
     protocol: TLSv1.3
+    # Verify client certificate chain against CA
+    verify-certificate-chain: true
     # Enabled cipher suites (empty = use defaults)
     cipher-suites: []
+  
+  # Private Certificate Authority Configuration
+  ca:
+    # Enable the private CA functionality
+    enabled: true
+    # CA keystore name in database
+    ca-keystore-name: pesit-ca-keystore
+    # CA truststore name in database (for distribution to clients)
+    ca-truststore-name: pesit-ca-truststore
+    # CA key alias
+    ca-key-alias: pesit-ca
+    # CA keystore password (use env var in production)
+    ca-keystore-password: ${PESIT_CA_PASSWORD:changeit}
+    # CA truststore password
+    ca-truststore-password: ${PESIT_CA_TRUSTSTORE_PASSWORD:changeit}
+    # CA certificate validity (days) - default 10 years
+    ca-validity-days: 3650
+    # Default certificate validity (days) - default 1 year
+    default-cert-validity-days: 365
+    # Key size for generated keys
+    key-size: 2048
+    # CA Subject DN components
+    ca-common-name: PeSIT Private CA
+    organization: PeSIT Wizard
+    organizational-unit: Certificate Authority
+    locality: Paris
+    state: IDF
+    country: FR
   
   server:
     # TCP port for Vectis protocol

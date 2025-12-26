@@ -19,6 +19,9 @@ import com.pesitwizard.server.entity.CertificateStore;
 import com.pesitwizard.server.entity.CertificateStore.CertificatePurpose;
 import com.pesitwizard.server.entity.CertificateStore.StoreFormat;
 import com.pesitwizard.server.entity.CertificateStore.StoreType;
+import com.pesitwizard.server.service.CertificateAuthorityService;
+import com.pesitwizard.server.service.CertificateAuthorityService.CertificateRequest;
+import com.pesitwizard.server.service.CertificateAuthorityService.SignedCertificate;
 import com.pesitwizard.server.service.CertificateService;
 import com.pesitwizard.server.service.CertificateService.CertificateStatistics;
 import com.pesitwizard.server.ssl.SslConfigurationException;
@@ -38,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 public class CertificateController {
 
     private final CertificateService certificateService;
+    private final CertificateAuthorityService caService;
 
     // ========== List & Get ==========
 
@@ -509,6 +513,107 @@ public class CertificateController {
     @GetMapping("/stats")
     public ResponseEntity<CertificateStatistics> getStatistics() {
         return ResponseEntity.ok(certificateService.getStatistics());
+    }
+
+    // ========== Certificate Authority ==========
+
+    /**
+     * Initialize the private CA (creates self-signed CA certificate)
+     */
+    @PostMapping("/ca/initialize")
+    public ResponseEntity<?> initializeCa() {
+        try {
+            CertificateStore caStore = caService.initializeCa("api");
+            log.info("CA initialized: {}", caStore.getSubjectDn());
+            return ResponseEntity.ok(caStore);
+        } catch (SslConfigurationException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /**
+     * Get CA certificate in PEM format (for distribution to clients)
+     */
+    @GetMapping(value = "/ca/certificate", produces = "application/x-pem-file")
+    public ResponseEntity<?> getCaCertificate() {
+        try {
+            String caCertPem = caService.getCaCertificatePem();
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=ca-certificate.pem")
+                    .body(caCertPem);
+        } catch (SslConfigurationException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /**
+     * Generate a CSR (Certificate Signing Request) for a new certificate
+     */
+    @PostMapping("/ca/csr")
+    public ResponseEntity<?> generateCsr(
+            @RequestParam String commonName,
+            @RequestParam(required = false) String organizationalUnit,
+            @RequestParam(required = false) String organization,
+            @RequestParam(defaultValue = "CLIENT") CertificatePurpose purpose) {
+        try {
+            CertificateRequest request = caService.generateCertificateRequest(
+                    commonName, organizationalUnit, organization, purpose);
+            log.info("CSR generated for: {}", commonName);
+            return ResponseEntity.ok(request);
+        } catch (SslConfigurationException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /**
+     * Sign a CSR with the CA
+     */
+    @PostMapping("/ca/sign")
+    public ResponseEntity<?> signCsr(
+            @RequestParam String csrPem,
+            @RequestParam(defaultValue = "CLIENT") CertificatePurpose purpose,
+            @RequestParam(defaultValue = "365") int validityDays,
+            @RequestParam(required = false) String partnerId) {
+        try {
+            SignedCertificate signed = caService.signCertificateRequest(
+                    csrPem, purpose, validityDays, partnerId, "api");
+            log.info("Certificate signed: {} (expires: {})", signed.getSubjectDn(), signed.getExpiresAt());
+            return ResponseEntity.ok(signed);
+        } catch (SslConfigurationException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /**
+     * Generate a complete certificate for a partner (key pair + signed cert)
+     */
+    @PostMapping("/ca/partner/{partnerId}/generate")
+    public ResponseEntity<?> generatePartnerCertificate(
+            @PathVariable String partnerId,
+            @RequestParam String commonName,
+            @RequestParam(defaultValue = "CLIENT") CertificatePurpose purpose,
+            @RequestParam(defaultValue = "365") int validityDays) {
+        try {
+            CertificateStore store = caService.generatePartnerCertificate(
+                    partnerId, commonName, purpose, validityDays, "api");
+            log.info("Partner certificate generated: {} for {}", store.getName(), partnerId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(store);
+        } catch (SslConfigurationException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
+    /**
+     * Verify a certificate was signed by our CA
+     */
+    @PostMapping("/ca/verify")
+    public ResponseEntity<?> verifyCertificate(@RequestParam String certificatePem) {
+        boolean valid = caService.verifyCertificate(certificatePem);
+        if (valid) {
+            return ResponseEntity.ok(new SuccessResponse("Certificate is valid and signed by our CA"));
+        } else {
+            return ResponseEntity.ok(new ErrorResponse("Certificate is not valid or not signed by our CA"));
+        }
     }
 
     // ========== Response DTOs ==========

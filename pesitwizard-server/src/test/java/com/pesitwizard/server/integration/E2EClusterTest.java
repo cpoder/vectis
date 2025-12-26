@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.mockito.Mock;
 
 import com.pesitwizard.fpdu.Fpdu;
 import com.pesitwizard.fpdu.FpduBuilder;
@@ -25,6 +26,7 @@ import com.pesitwizard.fpdu.FpduParser;
 import com.pesitwizard.fpdu.FpduType;
 import com.pesitwizard.fpdu.ParameterValue;
 import com.pesitwizard.server.config.PesitServerProperties;
+import com.pesitwizard.server.config.SslProperties;
 import com.pesitwizard.server.entity.PesitServerConfig;
 import com.pesitwizard.server.handler.ConnectionValidator;
 import com.pesitwizard.server.handler.DataTransferHandler;
@@ -36,6 +38,7 @@ import com.pesitwizard.server.service.ConfigService;
 import com.pesitwizard.server.service.PathPlaceholderService;
 import com.pesitwizard.server.service.PesitServerInstance;
 import com.pesitwizard.server.service.TransferTracker;
+import com.pesitwizard.server.ssl.SslContextFactory;
 
 /**
  * End-to-End Cluster Test
@@ -65,6 +68,12 @@ public class E2EClusterTest {
     private PesitServerInstance node1;
     private PesitServerInstance node2;
     private PesitServerInstance node3;
+
+    @Mock
+    private SslProperties sslProperties;
+
+    @Mock
+    private SslContextFactory sslContextFactory;
 
     @BeforeAll
     void checkIntegrationEnabled() {
@@ -316,7 +325,8 @@ public class E2EClusterTest {
 
         PesitSessionHandler sessionHandler = new PesitSessionHandler(properties, connectionValidator,
                 transferOperationHandler, dataTransferHandler, messageHandler, transferTracker);
-        PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler);
+        PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler, sslProperties,
+                sslContextFactory);
         instance.start();
 
         // Wait a bit for the server to be fully ready

@@ -13,10 +13,12 @@ import com.pesitwizard.server.cluster.ClusterEvent;
 import com.pesitwizard.server.cluster.ClusterEventListener;
 import com.pesitwizard.server.cluster.ClusterProvider;
 import com.pesitwizard.server.config.PesitServerProperties;
+import com.pesitwizard.server.config.SslProperties;
 import com.pesitwizard.server.entity.PesitServerConfig;
 import com.pesitwizard.server.entity.PesitServerConfig.ServerStatus;
 import com.pesitwizard.server.handler.PesitSessionHandler;
 import com.pesitwizard.server.repository.PesitServerConfigRepository;
+import com.pesitwizard.server.ssl.SslContextFactory;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -41,6 +43,8 @@ public class PesitServerManager implements ClusterEventListener {
     private final ClusterProvider clusterProvider;
     private final PesitSessionHandler sessionHandler;
     private final FileSystemService fileSystemService;
+    private final SslProperties sslProperties;
+    private final SslContextFactory sslContextFactory;
 
     // Map of running server instances: serverId -> PesitServerInstance
     private final Map<String, PesitServerInstance> runningServers = new ConcurrentHashMap<>();
@@ -218,8 +222,9 @@ public class PesitServerManager implements ClusterEventListener {
             validateServerDirectories(config);
 
             // Use injected session handler (Spring-managed with all dependencies)
-            // Create and start server instance
-            PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler);
+            // Create and start server instance with SSL/mTLS support
+            PesitServerInstance instance = new PesitServerInstance(
+                    config, properties, sessionHandler, sslProperties, sslContextFactory);
             instance.start();
 
             runningServers.put(serverId, instance);

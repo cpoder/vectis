@@ -32,14 +32,28 @@ public class SslProperties {
     private String truststoreName;
 
     /**
-     * Require client certificate (mutual TLS)
+     * Client authentication mode for mTLS.
+     * NONE = no client cert required
+     * WANT = request client cert but don't require it
+     * NEED = require valid client certificate (mandatory mTLS)
      */
-    private boolean clientAuth = false;
+    private ClientAuthMode clientAuth = ClientAuthMode.NONE;
 
     /**
      * TLS protocol version
      */
     private String protocol = "TLSv1.3";
+
+    /**
+     * Verify client certificate against CA
+     */
+    private boolean verifyCertificateChain = true;
+
+    public enum ClientAuthMode {
+        NONE, // No client certificate required
+        WANT, // Request but don't require
+        NEED // Mandatory client certificate (mTLS)
+    }
 
     /**
      * Enabled cipher suites (empty = use defaults)

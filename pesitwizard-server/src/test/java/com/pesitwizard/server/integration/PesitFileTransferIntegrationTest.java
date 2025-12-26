@@ -15,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -30,9 +31,11 @@ import com.pesitwizard.fpdu.ParameterValue;
 import com.pesitwizard.server.config.LogicalFileConfig;
 import com.pesitwizard.server.config.PartnerConfig;
 import com.pesitwizard.server.config.PesitServerProperties;
+import com.pesitwizard.server.config.SslProperties;
 import com.pesitwizard.server.entity.PesitServerConfig;
 import com.pesitwizard.server.handler.PesitSessionHandler;
 import com.pesitwizard.server.service.PesitServerInstance;
+import com.pesitwizard.server.ssl.SslContextFactory;
 
 /**
  * Integration test for complete PeSIT file transfer.
@@ -53,6 +56,12 @@ class PesitFileTransferIntegrationTest {
 
     @TempDir
     static Path tempDir;
+
+    @Mock
+    private SslProperties sslProperties;
+
+    @Mock
+    private SslContextFactory sslContextFactory;
 
     private PesitServerInstance serverInstance;
     private PesitServerProperties testProperties;
@@ -92,7 +101,8 @@ class PesitFileTransferIntegrationTest {
         serverConfig.setAutoStart(true);
 
         // Start the server
-        serverInstance = new PesitServerInstance(serverConfig, testProperties, sessionHandler);
+        serverInstance = new PesitServerInstance(serverConfig, testProperties, sessionHandler, sslProperties,
+                sslContextFactory);
         serverInstance.start();
 
         // Wait for server to be ready
