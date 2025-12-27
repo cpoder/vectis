@@ -536,16 +536,22 @@ public class CertificateAuthorityService {
     }
 
     private PrivateKey parsePrivateKey(String keyPem) throws Exception {
-        String cleaned = keyPem
-                .replace("-----BEGIN PRIVATE KEY-----", "")
-                .replace("-----END PRIVATE KEY-----", "")
-                .replace("-----BEGIN RSA PRIVATE KEY-----", "")
-                .replace("-----END RSA PRIVATE KEY-----", "")
-                .replaceAll("\\s", "");
+        try (PEMParser parser = new PEMParser(new StringReader(keyPem))) {
+            Object obj = parser.readObject();
 
-        byte[] decoded = Base64.getDecoder().decode(cleaned);
-        java.security.spec.PKCS8EncodedKeySpec keySpec = new java.security.spec.PKCS8EncodedKeySpec(decoded);
-        return java.security.KeyFactory.getInstance("RSA").generatePrivate(keySpec);
+            if (obj instanceof org.bouncycastle.openssl.PEMKeyPair) {
+                // PKCS#1 format (BEGIN RSA PRIVATE KEY)
+                org.bouncycastle.openssl.PEMKeyPair keyPair = (org.bouncycastle.openssl.PEMKeyPair) obj;
+                return new org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter()
+                        .getPrivateKey(keyPair.getPrivateKeyInfo());
+            } else if (obj instanceof org.bouncycastle.asn1.pkcs.PrivateKeyInfo) {
+                // PKCS#8 format (BEGIN PRIVATE KEY)
+                return new org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter()
+                        .getPrivateKey((org.bouncycastle.asn1.pkcs.PrivateKeyInfo) obj);
+            } else {
+                throw new SslConfigurationException("Unknown private key format: " + obj.getClass().getName());
+            }
+        }
     }
 
     private String generatePassword() {
