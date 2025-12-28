@@ -59,23 +59,24 @@ pesitwizard:
   
   # TLS/SSL Configuration
   ssl:
-    # Enable TLS for PeSIT protocol
-    enabled: false
+    # Enable TLS for PeSIT protocol (env: PESIT_SSL_ENABLED)
+    enabled: ${PESIT_SSL_ENABLED:false}
     # Keystore name (from database) - required if enabled
-    keystore-name: default-keystore
+    keystore-name: ${PESIT_SSL_KEYSTORE_NAME:default-keystore}
     # Truststore name (from database) - required for mTLS
-    truststore-name: pesit-ca-truststore
-    # Client authentication mode for mTLS:
-    #   NONE - No client certificate required (TLS only)
-    #   WANT - Request client certificate but don't require it
-    #   NEED - Require valid client certificate (mandatory mTLS)
-    client-auth: NONE
+    truststore-name: ${PESIT_SSL_TRUSTSTORE_NAME:pesit-ca-truststore}
+    # Client authentication mode for mTLS (env: PESIT_SSL_CLIENT_AUTH)
+    client-auth: ${PESIT_SSL_CLIENT_AUTH:NONE}
     # TLS protocol version (TLSv1.2, TLSv1.3)
-    protocol: TLSv1.3
+    protocol: ${PESIT_SSL_PROTOCOL:TLSv1.3}
     # Verify client certificate chain against CA
     verify-certificate-chain: true
     # Enabled cipher suites (empty = use defaults)
     cipher-suites: []
+    # Environment variable based certificates (for Kubernetes deployments)
+    keystore-data: ${PESIT_SSL_KEYSTORE_DATA:}
+    keystore-password: ${PESIT_SSL_KEYSTORE_PASSWORD:}
+    ca-cert-pem: ${PESIT_SSL_CA_CERT_PEM:}
   
   # Private Certificate Authority Configuration
   ca:
