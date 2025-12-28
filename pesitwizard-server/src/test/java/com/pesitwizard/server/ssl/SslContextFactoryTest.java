@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.pesitwizard.server.config.SslProperties;
 import com.pesitwizard.server.entity.CertificateStore;
 import com.pesitwizard.server.entity.CertificateStore.StoreFormat;
 import com.pesitwizard.server.entity.CertificateStore.StoreType;
@@ -27,11 +28,14 @@ class SslContextFactoryTest {
     @Mock
     private CertificateStoreRepository certificateRepository;
 
+    @Mock
+    private SslProperties sslProperties;
+
     private SslContextFactory factory;
 
     @BeforeEach
     void setUp() {
-        factory = new SslContextFactory(certificateRepository);
+        factory = new SslContextFactory(certificateRepository, sslProperties);
     }
 
     @Test
