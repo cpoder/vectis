@@ -8,6 +8,8 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 
+import javax.net.ssl.SSLSocket;
+
 import com.pesitwizard.fpdu.FpduIO;
 import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.model.SessionContext;
@@ -44,6 +46,19 @@ public class TcpConnectionHandler implements Runnable {
             socket.setSoTimeout(properties.getReadTimeout());
             socket.setKeepAlive(true);
             socket.setTcpNoDelay(true);
+
+            // For SSL sockets, explicitly complete the handshake before reading data
+            if (socket instanceof SSLSocket sslSocket) {
+                try {
+                    sslSocket.startHandshake();
+                    log.info("TLS handshake completed: protocol={}, cipher={}",
+                            sslSocket.getSession().getProtocol(),
+                            sslSocket.getSession().getCipherSuite());
+                } catch (IOException e) {
+                    log.error("TLS handshake failed: {}", e.getMessage());
+                    throw e;
+                }
+            }
 
             sessionContext = sessionHandler.createSession(remoteAddress, serverId);
 
