@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.pesitwizard.client.repository.PesitServerRepository;
+import com.pesitwizard.client.security.SecretsService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TlsController {
 
     private final PesitServerRepository serverRepository;
+    private final SecretsService secretsService;
 
     /**
      * Get TLS configuration status for a server
@@ -116,9 +118,9 @@ public class TlsController {
                             truststorePassword = password;
                         }
 
-                        // Store the truststore
+                        // Store the truststore with encrypted password
                         server.setTruststoreData(truststoreData);
-                        server.setTruststorePassword(truststorePassword);
+                        server.setTruststorePassword(secretsService.encrypt(truststorePassword));
                         serverRepository.save(server);
 
                         log.info("Truststore uploaded for server {}: {} bytes", serverId, truststoreData.length);
@@ -216,9 +218,9 @@ public class TlsController {
                             return ResponseEntity.badRequest().body(noKeyError);
                         }
 
-                        // Store the keystore
+                        // Store the keystore with encrypted password
                         server.setKeystoreData(data);
-                        server.setKeystorePassword(password);
+                        server.setKeystorePassword(secretsService.encrypt(password));
                         serverRepository.save(server);
 
                         log.info("Keystore uploaded for server {}: {} bytes", serverId, data.length);

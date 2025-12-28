@@ -35,6 +35,7 @@ import com.pesitwizard.client.entity.TransferHistory.TransferStatus;
 import com.pesitwizard.client.repository.StorageConnectionRepository;
 import com.pesitwizard.client.repository.TransferConfigRepository;
 import com.pesitwizard.client.repository.TransferHistoryRepository;
+import com.pesitwizard.client.security.SecretsService;
 import com.pesitwizard.connector.ConnectorException;
 import com.pesitwizard.connector.StorageConnector;
 import com.pesitwizard.fpdu.ConnectMessageBuilder;
@@ -72,6 +73,7 @@ public class TransferService {
         private final ConnectorRegistry connectorRegistry;
         private final StorageConnectionRepository connectionRepository;
         private final ObjectMapper objectMapper;
+        private final SecretsService secretsService;
 
         @Transactional
         public TransferResponse sendFile(TransferRequest request) {
@@ -388,9 +390,9 @@ public class TransferService {
                                                 server.getHost(),
                                                 server.getPort(),
                                                 server.getTruststoreData(),
-                                                server.getTruststorePassword(),
+                                                secretsService.decrypt(server.getTruststorePassword()),
                                                 server.getKeystoreData(),
-                                                server.getKeystorePassword());
+                                                secretsService.decrypt(server.getKeystorePassword()));
                         } else {
                                 tlsChannel = new TlsTransportChannel(server.getHost(), server.getPort());
                         }
