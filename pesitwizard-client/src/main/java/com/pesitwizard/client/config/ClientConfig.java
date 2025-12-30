@@ -1,17 +1,25 @@
 package com.pesitwizard.client.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-import lombok.Data;
+import com.pesitwizard.security.SecretsService;
+
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Configuration properties for PeSIT client
  */
-@Data
+@Getter
+@Setter
 @Component
 @ConfigurationProperties(prefix = "pesit.client")
 public class ClientConfig {
+
+    @Autowired(required = false)
+    private SecretsService secretsService;
 
     /**
      * Default server host
@@ -29,9 +37,41 @@ public class ClientConfig {
     private String clientId = "PESIT_CLIENT";
 
     /**
-     * Client password (if required)
+     * Client password (if required) - can be encrypted with AES: or vault: prefix
      */
     private String password;
+
+    /**
+     * Get password, auto-decrypting if encrypted
+     */
+    public String getPassword() {
+        if (password == null || password.isEmpty()) {
+            return password;
+        }
+        // Auto-decrypt if encrypted
+        if (secretsService != null && secretsService.isEncrypted(password)) {
+            return secretsService.decryptFromStorage(password);
+        }
+        return password;
+    }
+
+    /**
+     * Get raw password value without decryption (for storage)
+     */
+    public String getRawPassword() {
+        return password;
+    }
+
+    /**
+     * Set password, optionally encrypting it
+     */
+    public void setPasswordEncrypted(String plainPassword) {
+        if (secretsService != null && plainPassword != null && !plainPassword.isEmpty()) {
+            this.password = secretsService.encryptForStorage(plainPassword, "client", clientId, "password");
+        } else {
+            this.password = plainPassword;
+        }
+    }
 
     /**
      * Connection timeout in milliseconds
