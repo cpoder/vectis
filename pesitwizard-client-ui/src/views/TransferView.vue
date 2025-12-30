@@ -12,7 +12,9 @@ import {
   FolderOpen,
   ChevronDown,
   RotateCcw,
-  Play
+  Play,
+  StopCircle,
+  RefreshCw
 } from 'lucide-vue-next'
 import api from '@/api'
 import PathPlaceholderInput from '@/components/PathPlaceholderInput.vue'
@@ -31,6 +33,10 @@ const loading = ref(true)
 const transferring = ref(false)
 const result = ref<any>(null)
 const error = ref('')
+const currentTransferId = ref<string | null>(null)
+const progress = ref({ bytesTransferred: 0, fileSize: 0, percentage: 0 })
+const resumableTransfers = ref<any[]>([])
+let progressInterval: ReturnType<typeof setInterval> | null = null
 
 const form = ref({
   server: '',
@@ -66,9 +72,66 @@ const activeConnectionLabel = computed(() =>
 
 
 onMounted(async () => {
-  await Promise.all([loadServers(), loadConnections()])
+  await Promise.all([loadServers(), loadConnections(), loadResumableTransfers()])
   loading.value = false
 })
+
+async function loadResumableTransfers() {
+  try {
+    const response = await api.get('/transfers/resumable?size=5')
+    resumableTransfers.value = response.data?.content || []
+  } catch (e) {
+    console.error('Failed to load resumable transfers:', e)
+  }
+}
+
+function startProgressPolling(transferId: string) {
+  progressInterval = setInterval(async () => {
+    try {
+      const response = await api.get(`/transfers/${transferId}`)
+      const transfer = response.data
+      if (transfer) {
+        progress.value = {
+          bytesTransferred: transfer.bytesTransferred || 0,
+          fileSize: transfer.fileSize || 0,
+          percentage: transfer.fileSize > 0 
+            ? Math.round((transfer.bytesTransferred / transfer.fileSize) * 100) 
+            : 0
+        }
+        // Stop polling if transfer is complete
+        if (transfer.status !== 'IN_PROGRESS') {
+          stopProgressPolling()
+          result.value = transfer
+          transferring.value = false
+        }
+      }
+    } catch (e) {
+      console.error('Failed to poll progress:', e)
+    }
+  }, 1000)
+}
+
+function stopProgressPolling() {
+  if (progressInterval) {
+    clearInterval(progressInterval)
+    progressInterval = null
+  }
+}
+
+async function cancelCurrentTransfer() {
+  if (!currentTransferId.value) return
+  
+  try {
+    const response = await api.post(`/transfers/${currentTransferId.value}/cancel`)
+    result.value = response.data
+    stopProgressPolling()
+    transferring.value = false
+    await loadResumableTransfers() // Refresh resumable list
+  } catch (e: any) {
+    error.value = e.response?.data?.message || 'Failed to cancel transfer'
+    console.error('Cancel failed:', e)
+  }
+}
 
 async function loadServers() {
   try {
@@ -115,6 +178,8 @@ async function startTransfer() {
   transferring.value = true
   error.value = ''
   result.value = null
+  currentTransferId.value = null
+  progress.value = { bytesTransferred: 0, fileSize: 0, percentage: 0 }
 
   try {
     const endpoint = form.value.direction === 'SEND' ? '/transfers/send' : '/transfers/receive'
@@ -140,10 +205,17 @@ async function startTransfer() {
     
     const response = await api.post(endpoint, payload)
     result.value = response.data
+    
+    // Start progress polling if transfer is in progress
+    if (response.data?.transferId && response.data?.status === 'IN_PROGRESS') {
+      currentTransferId.value = response.data.transferId
+      startProgressPolling(response.data.transferId)
+    } else {
+      transferring.value = false
+    }
   } catch (e: any) {
     error.value = e.response?.data?.message || e.response?.data?.error || 'Transfer failed'
     console.error('Transfer failed:', e)
-  } finally {
     transferring.value = false
   }
 }
@@ -448,17 +520,75 @@ async function resumeTransfer(transferId: string) {
             {{ error }}
           </div>
 
-          <button 
-            type="submit" 
-            class="btn btn-primary w-full flex items-center justify-center gap-2"
-            :disabled="transferring"
-          >
-            <Loader2 v-if="transferring" class="h-4 w-4 animate-spin" />
-            <Upload v-else-if="form.direction === 'SEND'" class="h-4 w-4" />
-            <Download v-else class="h-4 w-4" />
-            {{ transferring ? 'Transferring...' : (form.direction === 'SEND' ? 'Send File' : 'Receive File') }}
-          </button>
+          <!-- Progress Bar (visible during transfer) -->
+          <div v-if="transferring" class="space-y-2">
+            <div class="flex justify-between text-sm text-gray-600">
+              <span>Progress</span>
+              <span>{{ formatBytes(progress.bytesTransferred) }} / {{ progress.fileSize > 0 ? formatBytes(progress.fileSize) : '...' }}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                class="bg-primary-600 h-3 rounded-full transition-all duration-300"
+                :style="{ width: progress.percentage + '%' }"
+              ></div>
+            </div>
+            <p class="text-center text-sm text-gray-500">{{ progress.percentage }}%</p>
+          </div>
+
+          <!-- Transfer / Cancel Buttons -->
+          <div class="flex gap-2">
+            <button 
+              v-if="!transferring"
+              type="submit" 
+              class="btn btn-primary flex-1 flex items-center justify-center gap-2"
+            >
+              <Upload v-if="form.direction === 'SEND'" class="h-4 w-4" />
+              <Download v-else class="h-4 w-4" />
+              {{ form.direction === 'SEND' ? 'Send File' : 'Receive File' }}
+            </button>
+            
+            <button 
+              v-if="transferring"
+              type="button"
+              @click="cancelCurrentTransfer"
+              class="btn btn-danger flex-1 flex items-center justify-center gap-2"
+            >
+              <StopCircle class="h-4 w-4" />
+              Cancel Transfer
+            </button>
+          </div>
         </form>
+
+        <!-- Resumable Transfers Section -->
+        <div v-if="resumableTransfers.length > 0" class="mt-6 border-t pt-4">
+          <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <RefreshCw class="h-4 w-4" />
+            Resumable Transfers
+          </h3>
+          <div class="space-y-2">
+            <div 
+              v-for="transfer in resumableTransfers" 
+              :key="transfer.id"
+              class="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+            >
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 truncate">{{ transfer.remoteFilename }}</p>
+                <p class="text-xs text-gray-500">
+                  {{ transfer.direction }} - {{ formatBytes(transfer.bytesAtLastSyncPoint || 0) }} / {{ formatBytes(transfer.fileSize || 0) }}
+                  <span v-if="transfer.lastSyncPoint">(checkpoint #{{ transfer.lastSyncPoint }})</span>
+                </p>
+              </div>
+              <button 
+                @click="resumeTransfer(transfer.id)"
+                class="btn btn-success btn-sm flex items-center gap-1"
+                :disabled="transferring"
+              >
+                <Play class="h-3 w-3" />
+                Resume
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Result -->
