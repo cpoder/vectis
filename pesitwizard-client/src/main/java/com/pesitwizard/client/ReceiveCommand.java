@@ -51,6 +51,9 @@ public class ReceiveCommand implements Callable<Integer> {
             "--password" }, description = "Partner password for authentication", interactive = true, arity = "0..1")
     private String password;
 
+    @Option(names = { "--tls" }, description = "Enable TLS/SSL connection")
+    private boolean tlsEnabled;
+
     public ReceiveCommand(PesitClientService clientService, ClientConfig config) {
         this.clientService = clientService;
         this.config = config;
@@ -61,12 +64,15 @@ public class ReceiveCommand implements Callable<Integer> {
         String targetHost = host != null ? host : config.getHost();
         int targetPort = port != null ? port : config.getPort();
 
-        // Use command-line credentials if provided
+        // Use command-line options if provided
         if (password != null && !password.isEmpty()) {
             config.setPassword(password);
         }
         if (userId != null && !userId.isEmpty()) {
             config.setClientId(userId);
+        }
+        if (tlsEnabled) {
+            config.setTlsEnabled(true);
         }
 
         // Determine local file path
