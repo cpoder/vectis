@@ -184,7 +184,7 @@ public class PesitSessionHandler {
             transferTracker.trackAuthenticationFailure(
                     ctx,
                     properties.getServerId(),
-                    properties.getNodeId(),
+                    properties.getServerId(), // nodeId same as serverId
                     String.format("0x%06X", validation.getDiagCode()),
                     validation.getMessage());
             return FpduResponseBuilder.buildRconnect(ctx, validation.getDiagCode(), validation.getMessage());
