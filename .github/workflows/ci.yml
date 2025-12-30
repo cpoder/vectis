@@ -22,7 +22,7 @@ jobs:
           cache: maven
 
       - name: Build and test all modules
-        run: mvn -B clean verify
+        run: mvn -B clean verify -U
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
