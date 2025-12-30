@@ -183,11 +183,13 @@ public class PesitSessionHandler {
                     ctx.getRemoteAddress(),
                     validation.getMessage());
             // Track as failed transfer so it appears in transfer history
+            // Format DiagnosticCode as hex: (code << 16) | reason
+            int diagCodeValue = (validation.getDiagCode().getCode() << 16) | validation.getDiagCode().getReason();
             transferTracker.trackAuthenticationFailure(
                     ctx,
                     properties.getServerId(),
                     clusterProvider.getNodeName(),
-                    String.format("0x%06X", validation.getDiagCode()),
+                    String.format("0x%06X", diagCodeValue),
                     validation.getMessage());
             return FpduResponseBuilder.buildRconnect(ctx, validation.getDiagCode(), validation.getMessage());
         }
