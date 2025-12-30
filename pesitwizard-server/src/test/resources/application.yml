@@ -1,0 +1,4 @@
+# Default test configuration
+spring:
+  main:
+    allow-bean-definition-overriding: true

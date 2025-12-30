@@ -47,6 +47,11 @@ public class SecretsConfig {
     private String vaultSecretId;
 
     @Bean
+    public SecretsService secretsService(SecretsProvider secretsProvider) {
+        return new SecretsService(secretsProvider);
+    }
+
+    @Bean
     @Primary
     public SecretsProvider secretsProvider() {
         EncryptionMode mode = parseMode(encryptionMode);
