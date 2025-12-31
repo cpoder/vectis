@@ -77,7 +77,6 @@ public class TransferService {
         private final ObjectMapper objectMapper;
         private final SecretsService secretsService;
 
-        @Transactional
         public TransferResponse sendFile(TransferRequest request) {
                 String correlationId = request.getCorrelationId() != null ? request.getCorrelationId()
                                 : UUID.randomUUID().toString();
@@ -169,7 +168,6 @@ public class TransferService {
                 return mapToResponse(history);
         }
 
-        @Transactional
         public TransferResponse receiveFile(TransferRequest request) {
                 String correlationId = request.getCorrelationId() != null ? request.getCorrelationId()
                                 : UUID.randomUUID().toString();
@@ -1072,9 +1070,8 @@ public class TransferService {
 
         /**
          * Update transfer progress in database.
-         * Uses a separate transaction to ensure progress is visible immediately.
+         * Uses saveAndFlush to ensure progress is visible immediately for polling.
          */
-        @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
         public void updateTransferProgress(String historyId, long bytesTransferred, int lastSyncPoint) {
                 if (historyId == null)
                         return;
@@ -1084,8 +1081,8 @@ public class TransferService {
                                 history.setLastSyncPoint(lastSyncPoint);
                                 history.setBytesAtLastSyncPoint(bytesTransferred);
                         }
-                        historyRepository.save(history);
-                        log.debug("Progress update: {} bytes, sync point {}", bytesTransferred, lastSyncPoint);
+                        historyRepository.saveAndFlush(history);
+                        log.info("Progress update: {} bytes transferred", bytesTransferred);
                 });
         }
 
