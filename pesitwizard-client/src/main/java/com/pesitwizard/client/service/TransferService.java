@@ -648,9 +648,10 @@ public class TransferService {
                                 ? request.getResyncEnabled()
                                 : config.isResyncEnabled();
 
-                // Progress tracking: update every 1MB or at least every 10 chunks
-                final long progressUpdateInterval = Math.max(1024 * 1024, chunkSize * 10L);
+                // Progress tracking: update every 5% of file or minimum every 32KB
+                final long progressUpdateInterval = Math.max(32 * 1024, data.length / 20);
                 long bytesSinceLastProgressUpdate = 0;
+                log.info("Progress update interval: {} bytes (fileSize={})", progressUpdateInterval, data.length);
 
                 // CONNECT - use ConnectMessageBuilder for correct structure
                 ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
@@ -859,9 +860,10 @@ public class TransferService {
                                 ? request.getResyncEnabled()
                                 : config.isResyncEnabled();
 
-                // Progress tracking: update every 1MB or at least every 10 chunks
-                final long progressUpdateInterval = Math.max(1024 * 1024, chunkSize * 10L);
+                // Progress tracking: update every 5% of file or minimum every 32KB
+                final long progressUpdateInterval = Math.max(32 * 1024, fileSize / 20);
                 long bytesSinceLastProgressUpdate = 0;
+                log.info("Progress update interval: {} bytes (fileSize={})", progressUpdateInterval, fileSize);
 
                 // CONNECT - use ConnectMessageBuilder for correct structure
                 ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
