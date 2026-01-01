@@ -45,6 +45,7 @@ import com.pesitwizard.fpdu.CreateMessageBuilder;
 import com.pesitwizard.fpdu.Fpdu;
 import com.pesitwizard.fpdu.FpduType;
 import com.pesitwizard.fpdu.ParameterGroupIdentifier;
+import com.pesitwizard.fpdu.ParameterIdentifier;
 import com.pesitwizard.fpdu.ParameterValue;
 import com.pesitwizard.session.PesitSession;
 import com.pesitwizard.transport.TcpTransportChannel;
@@ -493,6 +494,17 @@ public class TransferService {
                 }
         }
 
+        /**
+         * Parse a numeric value from a byte array (big-endian).
+         */
+        private int parseNumericValue(byte[] bytes) {
+                int value = 0;
+                for (byte b : bytes) {
+                        value = (value << 8) | (b & 0xFF);
+                }
+                return value;
+        }
+
         private TransportChannel createChannel(PesitServer server) {
                 return createChannel(server, 0);
         }
@@ -653,7 +665,17 @@ public class TransferService {
                                 .maxEntitySize(effectiveMaxEntity)
                                 .build(serverConnectionId);
 
-                session.sendFpduWithAck(createFpdu);
+                Fpdu ackCreate = session.sendFpduWithAck(createFpdu);
+
+                // Use negotiated max entity size from ACK_CREATE (PI 25)
+                int actualChunkSize = chunkSize;
+                ParameterValue pi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                if (pi25 != null && pi25.getValue() != null) {
+                        int negotiatedMaxEntity = parseNumericValue(pi25.getValue());
+                        actualChunkSize = Math.min(chunkSize, negotiatedMaxEntity);
+                        log.info("Using negotiated chunk size: {} (requested={}, server={})",
+                                        actualChunkSize, chunkSize, negotiatedMaxEntity);
+                }
 
                 // OPEN (ORF) - open file for writing
                 Fpdu openFpdu = new Fpdu(FpduType.OPEN)
@@ -674,7 +696,7 @@ public class TransferService {
                 long syncIntervalBytes = calculateSyncPointInterval(request, config, data.length);
 
                 while (offset < data.length) {
-                        int currentChunkSize = Math.min(chunkSize, data.length - offset);
+                        int currentChunkSize = Math.min(actualChunkSize, data.length - offset);
                         byte[] chunk = new byte[currentChunkSize];
                         System.arraycopy(data, offset, chunk, 0, currentChunkSize);
 
@@ -801,7 +823,18 @@ public class TransferService {
                                 .maxEntitySize(effectiveMaxEntity)
                                 .build(serverConnectionId);
 
-                session.sendFpduWithAck(createFpdu);
+                Fpdu ackCreateStreaming = session.sendFpduWithAck(createFpdu);
+
+                // Use negotiated max entity size from ACK_CREATE (PI 25)
+                int actualChunkSizeStreaming = chunkSize;
+                ParameterValue pi25Streaming = ackCreateStreaming
+                                .getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                if (pi25Streaming != null && pi25Streaming.getValue() != null) {
+                        int negotiatedMaxEntityStreaming = parseNumericValue(pi25Streaming.getValue());
+                        actualChunkSizeStreaming = Math.min(chunkSize, negotiatedMaxEntityStreaming);
+                        log.info("Streaming: Using negotiated chunk size: {} (requested={}, server={})",
+                                        actualChunkSizeStreaming, chunkSize, negotiatedMaxEntityStreaming);
+                }
 
                 // OPEN (ORF) - open file for writing
                 Fpdu openFpdu = new Fpdu(FpduType.OPEN)
@@ -820,7 +853,7 @@ public class TransferService {
                 long syncIntervalBytes = calculateSyncPointInterval(request, config,
                                 (int) Math.min(fileSize, Integer.MAX_VALUE));
 
-                byte[] buffer = new byte[chunkSize];
+                byte[] buffer = new byte[actualChunkSizeStreaming];
                 int bytesRead;
 
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
