@@ -477,21 +477,14 @@ public class TransferService {
 
         /**
          * Calculate optimal chunk size based on file size.
-         * - Small files (< 1MB): 4KB chunks
-         * - Medium files (1MB - 10MB): 16KB chunks
-         * - Large files (10MB - 100MB): 32KB chunks
-         * - Very large files (> 100MB): 65535 bytes (max for PI 25 which is 2 bytes)
+         * PeSIT SIT standard: max entity size = 4050 bytes (article) + 6 (header) =
+         * 4056
+         * CX and most servers support max 4096 bytes.
+         * We use 4096 as the standard max to ensure compatibility.
          */
         private int calculateOptimalChunkSize(long fileSize) {
-                if (fileSize < 1024 * 1024) { // < 1MB
-                        return 4096; // 4KB
-                } else if (fileSize < 10 * 1024 * 1024) { // < 10MB
-                        return 16384; // 16KB
-                } else if (fileSize < 100 * 1024 * 1024) { // < 100MB
-                        return 32768; // 32KB
-                } else {
-                        return 65535; // Max for PI 25 (2 bytes)
-                }
+                // Use 4096 as the standard PeSIT chunk size (compatible with SIT/CX)
+                return 4096;
         }
 
         /**
