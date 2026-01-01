@@ -13,6 +13,8 @@ public class ConnectMessageBuilder {
     private String password = null;
     private int accessType = 0; // 0=write, 1=read, 2=mixed
     private boolean syncPointsEnabled = false;
+    private int syncIntervalKb = 0xFFFF; // Default: undefined interval (0xFFFF)
+    private int syncAckWindow = 1; // Default: window of 1
     private boolean resyncEnabled = false;
 
     public ConnectMessageBuilder demandeur(String demandeur) {
@@ -50,9 +52,33 @@ public class ConnectMessageBuilder {
 
     /**
      * Enable sync points (PI_07 SYNC_POINTS)
+     * Uses default interval (undefined) and window (1)
      */
     public ConnectMessageBuilder syncPointsEnabled(boolean enabled) {
         this.syncPointsEnabled = enabled;
+        return this;
+    }
+
+    /**
+     * Set sync point interval in kilobytes.
+     * Special values:
+     * - 0 = no sync points
+     * - 0xFFFF = undefined interval (default)
+     * Minimum is 4 KB for SIT profile.
+     */
+    public ConnectMessageBuilder syncIntervalKb(int intervalKb) {
+        this.syncIntervalKb = intervalKb;
+        return this;
+    }
+
+    /**
+     * Set sync point acknowledgment window.
+     * - 0 = no acknowledgment of sync points
+     * - 1-16 = acknowledgment window size
+     * Maximum is 16 for SIT profile.
+     */
+    public ConnectMessageBuilder syncAckWindow(int window) {
+        this.syncAckWindow = Math.min(window, 16);
         return this;
     }
 
@@ -85,8 +111,14 @@ public class ConnectMessageBuilder {
         }
 
         // Add sync points capability (PI_07)
+        // Format: 3 bytes - [interval_high][interval_low][ack_window]
         if (syncPointsEnabled) {
-            fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_07_SYNC_POINTS, 1));
+            byte[] pi7Value = new byte[] {
+                    (byte) ((syncIntervalKb >> 8) & 0xFF), // Interval high byte
+                    (byte) (syncIntervalKb & 0xFF), // Interval low byte
+                    (byte) (syncAckWindow & 0xFF) // Acknowledgment window
+            };
+            fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_07_SYNC_POINTS, pi7Value));
         }
 
         // Add resync capability (PI_23)
