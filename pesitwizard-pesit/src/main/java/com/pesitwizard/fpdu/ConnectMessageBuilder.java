@@ -110,10 +110,17 @@ public class ConnectMessageBuilder {
             fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_05_CONTROLE_ACCES, password));
         }
 
-        // PI_07 (sync points): Don't send in CONNECT request.
-        // Let the server decide via ACONNECT response.
-        // Some servers (like CX) abort if PI_07 is sent with non-zero values.
-        // The server will return its supported sync configuration in ACONNECT.
+        // Add sync points capability (PI_07)
+        // Format: 3 bytes - [interval_high][interval_low][ack_window]
+        // Per PeSIT spec: interval >= 4 KB, window <= 16
+        if (syncPointsEnabled) {
+            byte[] pi7Value = new byte[] {
+                    (byte) ((syncIntervalKb >> 8) & 0xFF), // Interval high byte
+                    (byte) (syncIntervalKb & 0xFF), // Interval low byte
+                    (byte) (syncAckWindow & 0xFF) // Acknowledgment window
+            };
+            fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_07_SYNC_POINTS, pi7Value));
+        }
 
         // Add resync capability (PI_23)
         if (resyncEnabled) {
