@@ -65,6 +65,9 @@ public class TransferContext {
     /** Current sync point number */
     private int currentSyncPoint;
 
+    /** Bytes transferred since last sync point (for D2-222 validation) */
+    private long bytesSinceLastSync;
+
     /** Total bytes transferred */
     private long bytesTransferred;
 
@@ -106,6 +109,7 @@ public class TransferContext {
         this.restart = false;
         this.restartPoint = 0;
         this.currentSyncPoint = 0;
+        this.bytesSinceLastSync = 0;
         this.bytesTransferred = 0;
         this.recordsTransferred = 0;
         this.fileOutputStream = null;

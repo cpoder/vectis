@@ -227,6 +227,7 @@ public class DataTransferHandler {
     /**
      * Handle DTF (Data Transfer) FPDU - no response needed
      * Validates article length against announced record length (D2-220)
+     * Validates data without sync point (D2-222)
      */
     private Fpdu handleDtf(SessionContext ctx, Fpdu fpdu) {
         TransferContext transfer = ctx.getCurrentTransfer();
@@ -237,6 +238,7 @@ public class DataTransferHandler {
 
         // Get data payload from FPDU
         byte[] data = fpdu.getData();
+        int dataLength = data != null ? data.length : 0;
 
         // D2-220: Validate article length against announced record length
         FpduValidator.ValidationResult validation = fpduValidator.validateDtf(fpdu, transfer, data);
@@ -252,7 +254,20 @@ public class DataTransferHandler {
             return FpduResponseBuilder.buildAbort(ctx, validation.errorCode(), validation.message());
         }
 
-        log.debug("[{}] DTF: received {} bytes", ctx.getSessionId(), data != null ? data.length : 0);
+        // D2-222: Validate data without sync point
+        long syncIntervalBytes = properties.getSyncIntervalKb() * 1024L;
+        if (syncIntervalBytes > 0) {
+            long newBytesSinceSync = transfer.getBytesSinceLastSync() + dataLength;
+            validation = fpduValidator.validateDataWithoutSyncPoint(transfer, newBytesSinceSync, syncIntervalBytes);
+            if (!validation.valid()) {
+                log.warn("[{}] DTF D2-222 validation failed: {} bytes without sync (limit {})",
+                        ctx.getSessionId(), newBytesSinceSync, syncIntervalBytes);
+                return FpduResponseBuilder.buildAbort(ctx, validation.errorCode(), validation.message());
+            }
+            transfer.setBytesSinceLastSync(newBytesSinceSync);
+        }
+
+        log.debug("[{}] DTF: received {} bytes", ctx.getSessionId(), dataLength);
         transfer.setRecordsTransferred(transfer.getRecordsTransferred() + 1);
         return null; // No response for DTF
     }
@@ -279,6 +294,8 @@ public class DataTransferHandler {
         TransferContext transfer = ctx.getCurrentTransfer();
         if (transfer != null) {
             transfer.setCurrentSyncPoint(syncPoint);
+            // Reset bytes since last sync for D2-222 tracking
+            transfer.setBytesSinceLastSync(0);
             long bytesAtCheckpoint = transfer.getBytesTransferred();
             transferTracker.trackSyncPoint(ctx, bytesAtCheckpoint);
             log.info("[{}] SYN: checkpoint {} at {} bytes",
@@ -292,9 +309,26 @@ public class DataTransferHandler {
 
     /**
      * Handle IDT (Interrupt Data Transfer) FPDU
+     * Tracks the interruption in database for potential resume.
      */
     private Fpdu handleIdt(SessionContext ctx, Fpdu fpdu) {
-        log.info("[{}] IDT: transfer interrupted", ctx.getSessionId());
+        TransferContext transfer = ctx.getCurrentTransfer();
+        long bytesAtInterrupt = transfer != null ? transfer.getBytesTransferred() : 0;
+        int syncPointAtInterrupt = transfer != null ? transfer.getCurrentSyncPoint() : 0;
+
+        log.info("[{}] IDT: transfer interrupted at {} bytes, sync point {}",
+                ctx.getSessionId(), bytesAtInterrupt, syncPointAtInterrupt);
+
+        // Close output stream to flush data written so far
+        if (transfer != null) {
+            transfer.closeOutputStream();
+        }
+
+        // Track interruption in database - transfer can be resumed
+        transferTracker.trackTransferInterrupted(ctx,
+                String.format("Client initiated IDT at %d bytes (sync point %d)",
+                        bytesAtInterrupt, syncPointAtInterrupt));
+
         ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
         return FpduResponseBuilder.buildAckIdt(ctx);
     }

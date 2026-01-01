@@ -22,6 +22,7 @@ import com.pesitwizard.server.model.TransferContext;
 import com.pesitwizard.server.model.ValidationResult;
 import com.pesitwizard.server.service.AuditService;
 import com.pesitwizard.server.service.FpduResponseBuilder;
+import com.pesitwizard.server.service.FpduValidator;
 import com.pesitwizard.server.service.TransferTracker;
 import com.pesitwizard.server.state.ServerState;
 
@@ -47,6 +48,7 @@ public class PesitSessionHandler {
     private final TransferTracker transferTracker;
     private final AuditService auditService;
     private final ClusterProvider clusterProvider;
+    private final FpduValidator fpduValidator;
 
     /**
      * Create a new session context
@@ -152,6 +154,13 @@ public class PesitSessionHandler {
         if (fpdu.getFpduType() != FpduType.CONNECT) {
             log.warn("[{}] Expected CONNECT, got {}", ctx.getSessionId(), fpdu.getFpduType());
             return FpduResponseBuilder.buildAbort(ctx, DiagnosticCode.D3_311);
+        }
+
+        // D3-304: Validate PI order in CONNECT
+        FpduValidator.ValidationResult piOrderValidation = fpduValidator.validatePiOrder(fpdu);
+        if (!piOrderValidation.valid()) {
+            log.warn("[{}] PI order validation failed: {}", ctx.getSessionId(), piOrderValidation.message());
+            return FpduResponseBuilder.buildAbort(ctx, piOrderValidation.errorCode(), piOrderValidation.message());
         }
 
         // Extract connection parameters

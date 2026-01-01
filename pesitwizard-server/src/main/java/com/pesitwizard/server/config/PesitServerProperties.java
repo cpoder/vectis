@@ -49,6 +49,9 @@ public class PesitServerProperties {
     /** Enable sync points by default */
     private boolean syncPointsEnabled = true;
 
+    /** Sync point interval in KB (D2-222 validation). 0 = no limit */
+    private int syncIntervalKb = 64; // 64KB default
+
     /** Enable resynchronization by default */
     private boolean resyncEnabled = true;
 

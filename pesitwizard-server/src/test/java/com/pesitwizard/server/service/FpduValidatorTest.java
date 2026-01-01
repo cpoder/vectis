@@ -434,6 +434,123 @@ class FpduValidatorTest {
     }
 
     @Nested
+    @DisplayName("D2-222: Too Much Data Without Sync Point")
+    class DataWithoutSyncPointValidationTests {
+
+        @Test
+        @DisplayName("should accept data when sync points not required")
+        void shouldAcceptDataWhenSyncPointsNotRequired() {
+            TransferContext transfer = new TransferContext();
+            transfer.setBytesTransferred(0);
+            // No sync point interval configured = unlimited
+
+            ValidationResult result = validator.validateDataWithoutSyncPoint(transfer, 100000, 0);
+
+            assertTrue(result.valid());
+        }
+
+        @Test
+        @DisplayName("should accept data within sync point interval")
+        void shouldAcceptDataWithinSyncPointInterval() {
+            TransferContext transfer = new TransferContext();
+            transfer.setBytesTransferred(0);
+
+            // 50KB transferred, interval is 64KB, last sync at 0 -> OK
+            ValidationResult result = validator.validateDataWithoutSyncPoint(transfer, 50000, 65536);
+
+            assertTrue(result.valid());
+        }
+
+        @Test
+        @DisplayName("should reject data exceeding sync point interval (D2-222)")
+        void shouldRejectDataExceedingSyncPointInterval() {
+            TransferContext transfer = new TransferContext();
+            transfer.setBytesTransferred(0); // Last sync at 0
+
+            // 100KB transferred since last sync, interval is 64KB -> ERROR
+            ValidationResult result = validator.validateDataWithoutSyncPoint(transfer, 100000, 65536);
+
+            assertFalse(result.valid());
+            assertEquals(DiagnosticCode.D2_222, result.errorCode());
+            assertTrue(result.message().contains("sync"));
+        }
+
+        @Test
+        @DisplayName("should track bytes since last sync point")
+        void shouldTrackBytesSinceLastSyncPoint() {
+            TransferContext transfer = new TransferContext();
+            transfer.setBytesTransferred(50000); // Already transferred 50KB
+            transfer.setCurrentSyncPoint(1); // Had one sync at ~50KB
+
+            // New chunk of 40KB, but we're counting from last sync
+            // If last sync was at 50KB and we're now at 90KB, that's 40KB since sync
+            ValidationResult result = validator.validateDataWithoutSyncPoint(transfer, 40000, 65536);
+
+            assertTrue(result.valid());
+        }
+    }
+
+    @Nested
+    @DisplayName("PI Order Validation")
+    class PiOrderValidationTests {
+
+        @Test
+        @DisplayName("should accept CONNECT with correct PI order")
+        void shouldAcceptConnectWithCorrectPiOrder() {
+            Fpdu fpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, "CLIENT"))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_04_SERVEUR, "SERVER"))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_05_CONTROLE_ACCES, "PASS"))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0));
+
+            ValidationResult result = validator.validatePiOrder(fpdu);
+
+            assertTrue(result.valid());
+        }
+
+        @Test
+        @DisplayName("should reject CONNECT with incorrect PI order")
+        void shouldRejectConnectWithIncorrectPiOrder() {
+            // PI 22 before PI 06 is incorrect
+            Fpdu fpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, "CLIENT"))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2));
+
+            ValidationResult result = validator.validatePiOrder(fpdu);
+
+            assertFalse(result.valid());
+            assertEquals(DiagnosticCode.D3_304, result.errorCode());
+        }
+
+        @Test
+        @DisplayName("should accept CREATE with correct PI order")
+        void shouldAcceptCreateWithCorrectPiOrder() {
+            Fpdu fpdu = new Fpdu(FpduType.CREATE)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_12_NOM_FICHIER, "test.dat"))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE, 4096))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_32_LONG_ARTICLE, 1024));
+
+            ValidationResult result = validator.validatePiOrder(fpdu);
+
+            assertTrue(result.valid());
+        }
+
+        @Test
+        @DisplayName("should allow missing optional PIs")
+        void shouldAllowMissingOptionalPis() {
+            Fpdu fpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, "CLIENT"));
+            // Missing PI 04, 05, 06, etc - should be OK
+
+            ValidationResult result = validator.validatePiOrder(fpdu);
+
+            assertTrue(result.valid());
+        }
+    }
+
+    @Nested
     @DisplayName("File Size Validation (D2-224)")
     class FileSizeValidationTests {
 

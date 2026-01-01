@@ -211,6 +211,59 @@ public class FpduValidator {
     }
 
     /**
+     * Validate D2-222: Too much data without sync point.
+     * Checks if bytes transferred since last sync point exceeds the configured
+     * interval.
+     * 
+     * @param transfer           Current transfer context
+     * @param bytesSinceLastSync Bytes received since last sync point
+     * @param syncIntervalBytes  Configured sync point interval (0 = no limit)
+     */
+    public ValidationResult validateDataWithoutSyncPoint(TransferContext transfer,
+            long bytesSinceLastSync, long syncIntervalBytes) {
+        // No limit configured
+        if (syncIntervalBytes <= 0) {
+            return ValidationResult.ok();
+        }
+
+        if (bytesSinceLastSync > syncIntervalBytes) {
+            log.warn("D2-222: {} bytes without sync point exceeds interval {}",
+                    bytesSinceLastSync, syncIntervalBytes);
+            return ValidationResult.error(DiagnosticCode.D2_222,
+                    String.format("Too much data without sync point: %d bytes exceeds interval %d",
+                            bytesSinceLastSync, syncIntervalBytes));
+        }
+
+        return ValidationResult.ok();
+    }
+
+    /**
+     * Validate PI order in FPDU.
+     * PIs must appear in ascending order of their identifier within each FPDU type.
+     * D3-304: Invalid PI order.
+     */
+    public ValidationResult validatePiOrder(Fpdu fpdu) {
+        var parameters = fpdu.getParameters();
+        if (parameters == null || parameters.size() < 2) {
+            return ValidationResult.ok();
+        }
+
+        int lastPiId = -1;
+        for (ParameterValue pv : parameters) {
+            int currentPiId = pv.getParameter().getId();
+            if (currentPiId < lastPiId) {
+                log.warn("D3-304: PI {} appears after PI {} (incorrect order)",
+                        currentPiId, lastPiId);
+                return ValidationResult.error(DiagnosticCode.D3_304,
+                        String.format("Invalid PI order: PI %d after PI %d", currentPiId, lastPiId));
+            }
+            lastPiId = currentPiId;
+        }
+
+        return ValidationResult.ok();
+    }
+
+    /**
      * Validate file size against announced size (if any).
      * D2-224: File size must not exceed announced size in CREATE.
      */

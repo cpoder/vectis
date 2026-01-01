@@ -278,7 +278,7 @@ public class ClusterFailoverTest {
 
         PesitSessionHandler sessionHandler = new PesitSessionHandler(properties, connectionValidator,
                 transferOperationHandler, dataTransferHandler, messageHandler, transferTracker, auditService,
-                clusterProvider);
+                clusterProvider, fpduValidator);
 
         return new PesitServerInstance(config, properties, sessionHandler, sslProperties, sslContextFactory);
     }

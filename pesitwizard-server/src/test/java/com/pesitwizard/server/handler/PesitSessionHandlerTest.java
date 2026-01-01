@@ -56,14 +56,20 @@ class PesitSessionHandlerTest {
     @Mock
     private com.pesitwizard.server.cluster.ClusterProvider clusterProvider;
 
+    @Mock
+    private com.pesitwizard.server.service.FpduValidator fpduValidator;
+
     private PesitSessionHandler handler;
 
     @BeforeEach
     void setUp() {
         handler = new PesitSessionHandler(properties, connectionValidator,
                 transferOperationHandler, dataTransferHandler, messageHandler, transferTracker, auditService,
-                clusterProvider);
+                clusterProvider, fpduValidator);
         lenient().when(properties.getServerId()).thenReturn("TEST_SERVER");
+        // Default stub for PI order validation
+        lenient().when(fpduValidator.validatePiOrder(any())).thenReturn(
+                com.pesitwizard.server.service.FpduValidator.ValidationResult.ok());
     }
 
     @Test

@@ -332,7 +332,7 @@ public class E2EClusterTest {
 
         PesitSessionHandler sessionHandler = new PesitSessionHandler(properties, connectionValidator,
                 transferOperationHandler, dataTransferHandler, messageHandler, transferTracker, auditService,
-                clusterProvider);
+                clusterProvider, fpduValidator);
         PesitServerInstance instance = new PesitServerInstance(config, properties, sessionHandler, sslProperties,
                 sslContextFactory);
         instance.start();
