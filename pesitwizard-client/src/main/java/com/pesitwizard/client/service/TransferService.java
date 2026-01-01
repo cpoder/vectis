@@ -659,12 +659,13 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF; // PI_13 is 3 bytes max
-                // PI 32 (recordLength) must match server config - use config value
-                // PI 25 (maxEntitySize) = min of chunkSize and recordLength (articles <= record
-                // length)
+                // PI 32 (recordLength) = max ARTICLE size, must match server config
+                // PI 25 (maxEntitySize) = max ENTITY size >= PI 32 + 6 (FPDU header) per PeSIT
+                // spec
+                // DTF chunks = articles, must be <= PI 32
                 int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
-                int effectiveMaxEntity = Math.min(chunkSize, effectiveRecordLength);
-                log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
+                int effectiveMaxEntity = effectiveRecordLength + 6; // Entity = article + 6-byte header
+                log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, PI32(article)={}, PI25(entity)={}, syncPointsEnabled={}",
                                 recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
@@ -676,14 +677,17 @@ public class TransferService {
 
                 Fpdu ackCreate = session.sendFpduWithAck(createFpdu);
 
-                // Use negotiated max entity size from ACK_CREATE (PI 25)
-                int actualChunkSize = chunkSize;
+                // Use negotiated max entity size from ACK_CREATE (PI 25) to determine max
+                // article size
+                // Actual chunk (article) size = min(PI 32, negotiated PI 25 - 6)
+                int actualChunkSize = effectiveRecordLength;
                 ParameterValue pi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
                 if (pi25 != null && pi25.getValue() != null) {
                         int negotiatedMaxEntity = parseNumericValue(pi25.getValue());
-                        actualChunkSize = Math.min(chunkSize, negotiatedMaxEntity);
-                        log.info("Using negotiated chunk size: {} (requested={}, server={})",
-                                        actualChunkSize, chunkSize, negotiatedMaxEntity);
+                        int maxArticleFromEntity = negotiatedMaxEntity - 6; // Entity includes 6-byte header
+                        actualChunkSize = Math.min(effectiveRecordLength, maxArticleFromEntity);
+                        log.info("Non-streaming: PI25 negotiated={}, max article={}, using chunk size={}",
+                                        negotiatedMaxEntity, maxArticleFromEntity, actualChunkSize);
                 }
 
                 // OPEN (ORF) - open file for writing
@@ -851,12 +855,13 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
-                // PI 32 (recordLength) must match server config - use config value
-                // PI 25 (maxEntitySize) = min of chunkSize and recordLength (articles <= record
-                // length)
+                // PI 32 (recordLength) = max ARTICLE size, must match server config
+                // PI 25 (maxEntitySize) = max ENTITY size >= PI 32 + 6 (FPDU header) per PeSIT
+                // spec
+                // DTF chunks = articles, must be <= PI 32
                 int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
-                int effectiveMaxEntity = Math.min(chunkSize, effectiveRecordLength);
-                log.info("CREATE params: recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
+                int effectiveMaxEntity = effectiveRecordLength + 6; // Entity = article + 6-byte header
+                log.info("CREATE params: recordLength={}, chunkSize={}, PI32(article)={}, PI25(entity)={}, syncPointsEnabled={}",
                                 recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
@@ -868,15 +873,18 @@ public class TransferService {
 
                 Fpdu ackCreateStreaming = session.sendFpduWithAck(createFpdu);
 
-                // Use negotiated max entity size from ACK_CREATE (PI 25)
-                int actualChunkSizeStreaming = chunkSize;
+                // Use negotiated max entity size from ACK_CREATE (PI 25) to determine max
+                // article size
+                // Actual chunk (article) size = min(PI 32, negotiated PI 25 - 6)
+                int actualChunkSizeStreaming = effectiveRecordLength;
                 ParameterValue pi25Streaming = ackCreateStreaming
                                 .getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
                 if (pi25Streaming != null && pi25Streaming.getValue() != null) {
-                        int negotiatedMaxEntityStreaming = parseNumericValue(pi25Streaming.getValue());
-                        actualChunkSizeStreaming = Math.min(chunkSize, negotiatedMaxEntityStreaming);
-                        log.info("Streaming: Using negotiated chunk size: {} (requested={}, server={})",
-                                        actualChunkSizeStreaming, chunkSize, negotiatedMaxEntityStreaming);
+                        int negotiatedMaxEntity = parseNumericValue(pi25Streaming.getValue());
+                        int maxArticleFromEntity = negotiatedMaxEntity - 6; // Entity includes 6-byte header
+                        actualChunkSizeStreaming = Math.min(effectiveRecordLength, maxArticleFromEntity);
+                        log.info("Streaming: PI25 negotiated={}, max article={}, using chunk size={}",
+                                        negotiatedMaxEntity, maxArticleFromEntity, actualChunkSizeStreaming);
                 }
 
                 // OPEN (ORF) - open file for writing
