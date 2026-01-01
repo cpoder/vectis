@@ -19,6 +19,7 @@ import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.model.SessionContext;
 import com.pesitwizard.server.model.TransferContext;
 import com.pesitwizard.server.service.FpduResponseBuilder;
+import com.pesitwizard.server.service.FpduValidator;
 import com.pesitwizard.server.service.TransferTracker;
 import com.pesitwizard.server.state.ServerState;
 
@@ -35,6 +36,7 @@ public class DataTransferHandler {
 
     private final PesitServerProperties properties;
     private final TransferTracker transferTracker;
+    private final FpduValidator fpduValidator;
 
     /**
      * Handle WRITE FPDU
@@ -224,13 +226,34 @@ public class DataTransferHandler {
 
     /**
      * Handle DTF (Data Transfer) FPDU - no response needed
+     * Validates article length against announced record length (D2-220)
      */
     private Fpdu handleDtf(SessionContext ctx, Fpdu fpdu) {
         TransferContext transfer = ctx.getCurrentTransfer();
-        if (transfer != null) {
-            log.debug("[{}] DTF: received data record", ctx.getSessionId());
-            transfer.setRecordsTransferred(transfer.getRecordsTransferred() + 1);
+        if (transfer == null) {
+            log.warn("[{}] DTF: no active transfer context", ctx.getSessionId());
+            return FpduResponseBuilder.buildAbort(ctx, DiagnosticCode.D3_311);
         }
+
+        // Get data payload from FPDU
+        byte[] data = fpdu.getData();
+
+        // D2-220: Validate article length against announced record length
+        FpduValidator.ValidationResult validation = fpduValidator.validateDtf(fpdu, transfer, data);
+        if (!validation.valid()) {
+            log.warn("[{}] DTF validation failed: {}", ctx.getSessionId(), validation.message());
+            return FpduResponseBuilder.buildAbort(ctx, validation.errorCode(), validation.message());
+        }
+
+        // Validate max entity size
+        validation = fpduValidator.validateMaxEntitySize(data, transfer);
+        if (!validation.valid()) {
+            log.warn("[{}] DTF max entity size validation failed: {}", ctx.getSessionId(), validation.message());
+            return FpduResponseBuilder.buildAbort(ctx, validation.errorCode(), validation.message());
+        }
+
+        log.debug("[{}] DTF: received {} bytes", ctx.getSessionId(), data != null ? data.length : 0);
+        transfer.setRecordsTransferred(transfer.getRecordsTransferred() + 1);
         return null; // No response for DTF
     }
 

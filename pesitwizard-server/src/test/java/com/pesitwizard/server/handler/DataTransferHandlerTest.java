@@ -17,6 +17,7 @@ import com.pesitwizard.fpdu.ParameterValue;
 import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.model.SessionContext;
 import com.pesitwizard.server.model.TransferContext;
+import com.pesitwizard.server.service.FpduValidator;
 import com.pesitwizard.server.service.TransferTracker;
 import com.pesitwizard.server.state.ServerState;
 
@@ -30,11 +31,14 @@ class DataTransferHandlerTest {
     @Mock
     private TransferTracker transferTracker;
 
+    @Mock
+    private FpduValidator fpduValidator;
+
     private DataTransferHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new DataTransferHandler(properties, transferTracker);
+        handler = new DataTransferHandler(properties, transferTracker, fpduValidator);
     }
 
     @Test
