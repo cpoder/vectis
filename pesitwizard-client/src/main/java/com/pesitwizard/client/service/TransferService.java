@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,54 +84,73 @@ public class TransferService {
                 String correlationId = request.getCorrelationId() != null ? request.getCorrelationId()
                                 : UUID.randomUUID().toString();
 
-                return Observation.createNotStarted("pesit.send", observationRegistry)
-                                .lowCardinalityKeyValue("pesit.direction", "SEND")
-                                .highCardinalityKeyValue("pesit.server", request.getServer())
-                                .highCardinalityKeyValue("correlation.id", correlationId)
-                                .observe(() -> doSendFile(request, correlationId));
-        }
-
-        private TransferResponse doSendFile(TransferRequest request, String correlationId) {
                 PesitServer server = resolveServer(request.getServer());
                 TransferConfig config = resolveConfig(request.getTransferConfig());
-
-                // Use filename if provided, fallback to deprecated localPath for compatibility
-                String filename = request.getFilename() != null ? request.getFilename() : request.getFilename();
+                String filename = request.getFilename();
                 String sourceConnId = request.getSourceConnectionId();
 
-                TransferHistory history = createHistory(server, config, TransferDirection.SEND,
-                                filename, request.getRemoteFilename(), request.getPartnerId(),
-                                correlationId);
-
-                StorageConnector connector = null;
-                InputStream inputStream = null;
-
+                // Get file size for history record
+                long fileSize;
                 try {
-                        long fileSize;
-
                         if (sourceConnId != null) {
-                                // Stream from storage connector (no full load into memory)
-                                connector = createConnectorFromConnectionId(sourceConnId);
+                                StorageConnector connector = createConnectorFromConnectionId(sourceConnId);
                                 fileSize = connector.getMetadata(filename).getSize();
-                                inputStream = connector.read(filename, 0);
-                                log.info("Streaming {} bytes from connector {} path {}", fileSize, sourceConnId,
-                                                filename);
+                                connector.close();
                         } else {
-                                // Stream from local filesystem (no full load into memory)
                                 Path localFile = Path.of(filename);
                                 if (!Files.exists(localFile)) {
                                         throw new IllegalArgumentException("Local file not found: " + filename);
                                 }
                                 fileSize = Files.size(localFile);
+                        }
+                } catch (Exception e) {
+                        throw new RuntimeException("Failed to get file size: " + e.getMessage(), e);
+                }
+
+                // Create history record and return immediately
+                TransferHistory history = createHistory(server, config, TransferDirection.SEND,
+                                filename, request.getRemoteFilename(), request.getPartnerId(),
+                                correlationId);
+                history.setFileSize(fileSize);
+                history.setStatus(TransferStatus.IN_PROGRESS);
+                history.setBytesTransferred(0L);
+                history = historyRepository.save(history);
+
+                // Execute transfer asynchronously
+                doSendFileAsync(request, history.getId(), server, config, fileSize, correlationId);
+
+                return mapToResponse(history);
+        }
+
+        @Async("transferExecutor")
+        public void doSendFileAsync(TransferRequest request, String historyId, PesitServer server,
+                        TransferConfig config, long fileSize, String correlationId) {
+                Observation.createNotStarted("pesit.send", observationRegistry)
+                                .lowCardinalityKeyValue("pesit.direction", "SEND")
+                                .highCardinalityKeyValue("pesit.server", request.getServer())
+                                .highCardinalityKeyValue("correlation.id", correlationId)
+                                .observe(() -> doSendFile(request, historyId, server, config, fileSize));
+        }
+
+        private void doSendFile(TransferRequest request, String historyId, PesitServer server,
+                        TransferConfig config, long fileSize) {
+                String filename = request.getFilename();
+                String sourceConnId = request.getSourceConnectionId();
+
+                StorageConnector connector = null;
+                InputStream inputStream = null;
+
+                try {
+                        if (sourceConnId != null) {
+                                connector = createConnectorFromConnectionId(sourceConnId);
+                                inputStream = connector.read(filename, 0);
+                                log.info("Streaming {} bytes from connector {} path {}", fileSize, sourceConnId,
+                                                filename);
+                        } else {
+                                Path localFile = Path.of(filename);
                                 inputStream = new BufferedInputStream(Files.newInputStream(localFile), 64 * 1024);
                                 log.info("Streaming {} bytes from local file {}", fileSize, filename);
                         }
-
-                        history.setFileSize(fileSize);
-                        history.setStatus(TransferStatus.IN_PROGRESS);
-                        history.setBytesTransferred(0L);
-                        history = historyRepository.save(history);
-                        final String historyId = history.getId();
 
                         TransportChannel channel = createChannel(server, fileSize);
 
@@ -139,19 +159,30 @@ public class TransferService {
                                                 historyId);
                         }
 
-                        history.setStatus(TransferStatus.COMPLETED);
-                        history.setBytesTransferred(fileSize);
-                        history.setCompletedAt(Instant.now());
-                        // Note: checksum computed during streaming is not available here
-                        // Could add streaming checksum calculation if needed
+                        // Update history on success
+                        historyRepository.findById(historyId).ifPresent(history -> {
+                                history.setStatus(TransferStatus.COMPLETED);
+                                history.setBytesTransferred(fileSize);
+                                history.setCompletedAt(Instant.now());
+                                historyRepository.save(history);
+                        });
+
+                        // Send completion via WebSocket
+                        progressService.sendComplete(historyId, fileSize, fileSize);
 
                 } catch (Exception e) {
-                        history.setStatus(TransferStatus.FAILED);
-                        history.setErrorMessage(e.getMessage());
-                        history.setCompletedAt(Instant.now());
+                        // Update history on failure
+                        historyRepository.findById(historyId).ifPresent(history -> {
+                                history.setStatus(TransferStatus.FAILED);
+                                history.setErrorMessage(e.getMessage());
+                                history.setCompletedAt(Instant.now());
+                                historyRepository.save(history);
+                        });
+
+                        // Send failure via WebSocket
+                        progressService.sendFailed(historyId, e.getMessage());
                         log.error("Send transfer failed: {}", e.getMessage(), e);
                 } finally {
-                        // Clean up resources
                         if (inputStream != null) {
                                 try {
                                         inputStream.close();
@@ -165,9 +196,6 @@ public class TransferService {
                                 }
                         }
                 }
-
-                history = historyRepository.save(history);
-                return mapToResponse(history);
         }
 
         public TransferResponse receiveFile(TransferRequest request) {
