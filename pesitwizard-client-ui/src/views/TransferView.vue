@@ -130,19 +130,48 @@ async function loadResumableTransfers() {
   }
 }
 
+let pollingInterval: ReturnType<typeof setInterval> | null = null
+
 function startProgressTracking(transferId: string) {
   // Connect to WebSocket and subscribe to transfer progress
   wsReset()
   subscribeToTransfer(transferId)
+  
+  // Also poll API as fallback in case WebSocket misses the message
+  pollingInterval = setInterval(async () => {
+    try {
+      const response = await api.get(`/transfers/${transferId}`)
+      const status = response.data?.status
+      console.log('Polling transfer status:', status)
+      if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
+        stopProgressTracking()
+        result.value = response.data
+        transferring.value = false
+        if (status === 'FAILED') {
+          error.value = response.data?.errorMessage || 'Transfer failed'
+        }
+      }
+    } catch (e) {
+      console.error('Polling error:', e)
+    }
+  }, 2000) // Poll every 2 seconds
 }
 
 function stopProgressTracking() {
   wsUnsubscribe()
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
 }
 
 // Cleanup on unmount
 onUnmounted(() => {
   wsDisconnect()
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
 })
 
 async function cancelCurrentTransfer() {
@@ -232,12 +261,15 @@ async function startTransfer() {
     
     const response = await api.post(endpoint, payload)
     result.value = response.data
+    console.log('Transfer response:', response.data)
     
     // Start progress polling if transfer is in progress
     if (response.data?.transferId && response.data?.status === 'IN_PROGRESS') {
+      console.log('Starting WebSocket tracking for transfer:', response.data.transferId)
       currentTransferId.value = response.data.transferId
       startProgressTracking(response.data.transferId)
     } else {
+      console.log('Transfer not IN_PROGRESS, status:', response.data?.status)
       transferring.value = false
     }
   } catch (e: any) {

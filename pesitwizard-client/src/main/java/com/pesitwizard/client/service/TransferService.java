@@ -165,6 +165,7 @@ public class TransferService {
                         }
 
                         // Update history on success
+                        log.info("Transfer {} completed successfully, updating DB and sending WebSocket", historyId);
                         historyRepository.findById(historyId).ifPresent(history -> {
                                 history.setStatus(TransferStatus.COMPLETED);
                                 history.setBytesTransferred(fileSize);
@@ -173,10 +174,12 @@ public class TransferService {
                         });
 
                         // Send completion via WebSocket
+                        log.info("Sending WebSocket COMPLETED for transfer {}", historyId);
                         progressService.sendComplete(historyId, fileSize, fileSize);
 
                 } catch (Exception e) {
                         // Update history on failure
+                        log.error("Transfer {} FAILED: {}", historyId, e.getMessage());
                         historyRepository.findById(historyId).ifPresent(history -> {
                                 history.setStatus(TransferStatus.FAILED);
                                 history.setErrorMessage(e.getMessage());
@@ -185,6 +188,7 @@ public class TransferService {
                         });
 
                         // Send failure via WebSocket
+                        log.info("Sending WebSocket FAILED for transfer {}", historyId);
                         progressService.sendFailed(historyId, e.getMessage());
                         log.error("Send transfer failed: {}", e.getMessage(), e);
                 } finally {
