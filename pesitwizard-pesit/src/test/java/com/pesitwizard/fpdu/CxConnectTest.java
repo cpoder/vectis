@@ -3,6 +3,8 @@ package com.pesitwizard.fpdu;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Test script to find valid PI 7 (sync points) configuration for CX server.
@@ -95,10 +97,30 @@ public class CxConnectTest {
             if (!checkDiagnostic(ackWrite, "ACK_WRITE"))
                 return;
 
-            // 5. DTF - send test data with same transport framing as other FPDUs
-            byte[] testData = "Hello from CxConnectTest - this is test data for PeSIT transfer validation!".getBytes();
-            byte[] dtfBytes = FpduBuilder.buildFpdu(FpduType.DTF, serverConnId, 0, testData);
-            System.out.println("Sending DTF (" + dtfBytes.length + " bytes, data=" + testData.length + " bytes)");
+            // 5. DTF - test multi-article transfer
+            // With PI 25 = 512, we can fit multiple small articles in one entity
+            // Article format for variable records: [2-byte length][article data]
+            List<byte[]> articles = new ArrayList<>();
+            articles.add("Article 1: First record".getBytes());
+            articles.add("Article 2: Second record".getBytes());
+            articles.add("Article 3: Third record".getBytes());
+
+            int articlesPerEntity = FpduBuilder.calculateArticlesPerEntity(25, negotiatedPi25);
+            System.out
+                    .println("Articles per entity (PI25=" + negotiatedPi25 + ", articleSize=25): " + articlesPerEntity);
+
+            // Build multi-article DTF
+            byte[] dtfBytes = FpduBuilder.buildMultiArticleDtf(serverConnId, articles, negotiatedPi25);
+            if (dtfBytes == null) {
+                // Fallback to single article if multi doesn't fit
+                byte[] testData = "Hello from CxConnectTest - this is test data for PeSIT transfer validation!"
+                        .getBytes();
+                dtfBytes = FpduBuilder.buildFpdu(FpduType.DTF, serverConnId, 0, testData);
+                System.out.println("Sending single-article DTF (" + dtfBytes.length + " bytes)");
+            } else {
+                System.out.println(
+                        "Sending multi-article DTF (" + dtfBytes.length + " bytes, " + articles.size() + " articles)");
+            }
             out.writeShort(dtfBytes.length); // transport framing
             out.write(dtfBytes);
             out.flush();

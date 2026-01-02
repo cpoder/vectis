@@ -63,4 +63,59 @@ public class FpduBuilder {
         return buildFpdu(fpdu.getFpduType(), fpdu.getIdDst(), fpdu.getIdSrc(),
                 fpdu.getParameters().toArray(new ParameterValue[0]));
     }
+
+    /**
+     * Build a multi-article DTF FPDU for variable-length records.
+     * Format: [total_length][phase][type][idDst][idSrc][len1][art1][len2][art2]...
+     * Each article is prefixed with a 2-byte length.
+     * 
+     * @param idDest        Destination connection ID
+     * @param articles      List of article data (each article is a byte array)
+     * @param maxEntitySize Maximum entity size (PI 25) - total FPDU must not exceed
+     *                      this
+     * @return DTF FPDU bytes, or null if articles don't fit
+     */
+    public static byte[] buildMultiArticleDtf(int idDest, List<byte[]> articles, int maxEntitySize) {
+        // Calculate total size: 6 (header) + sum of (2 + article.length) for each
+        // article
+        int dataSize = 0;
+        for (byte[] article : articles) {
+            dataSize += 2 + article.length; // 2-byte length prefix + article data
+        }
+        int totalSize = 6 + dataSize;
+
+        if (totalSize > maxEntitySize) {
+            return null; // Doesn't fit
+        }
+
+        ByteBuffer fpdu = ByteBuffer.allocate(totalSize);
+        fpdu.putShort((short) totalSize); // Total length
+        fpdu.put((byte) FpduType.DTF.getPhase());
+        fpdu.put((byte) FpduType.DTF.getType());
+        fpdu.put((byte) idDest);
+        fpdu.put((byte) 0); // idSrc = 0 for file-level FPDUs
+
+        // Add each article with 2-byte length prefix
+        for (byte[] article : articles) {
+            fpdu.putShort((short) article.length);
+            fpdu.put(article);
+        }
+
+        return fpdu.array();
+    }
+
+    /**
+     * Calculate how many articles can fit in one entity.
+     * 
+     * @param articleSize   Size of each article
+     * @param maxEntitySize Maximum entity size (PI 25)
+     * @return Number of articles that fit (minimum 1)
+     */
+    public static int calculateArticlesPerEntity(int articleSize, int maxEntitySize) {
+        // Each article needs: 2 (length prefix) + articleSize
+        // Entity overhead: 6 (FPDU header)
+        int availableSpace = maxEntitySize - 6;
+        int articleWithPrefix = 2 + articleSize;
+        return Math.max(1, availableSpace / articleWithPrefix);
+    }
 }
