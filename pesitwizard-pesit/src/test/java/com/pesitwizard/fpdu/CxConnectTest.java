@@ -50,19 +50,36 @@ public class CxConnectTest {
             int serverConnId = aconnect.getIdSrc();
             System.out.println("Server connection ID: " + serverConnId);
 
-            // 2. CREATE with PI 25 = 512, PI 32 = 506
+            // 2. CREATE - propose value and read server's negotiated response
+            // CX server has a limit (512), so we use that as the proposal
+            // A real client should read PI 25 from ACONNECT if present
+            int proposedPi25 = 512;
+            int proposedPi32 = proposedPi25 - 6;
+            System.out.println("CREATE: proposing PI25=" + proposedPi25 + ", PI32=" + proposedPi32);
             Fpdu createFpdu = new CreateMessageBuilder()
                     .filename("FILE")
                     .transferId(1)
                     .variableFormat()
-                    .recordLength(506)
-                    .maxEntitySize(512)
+                    .recordLength(proposedPi32)
+                    .maxEntitySize(proposedPi25)
                     .fileSizeKB(1)
                     .build(serverConnId);
             sendFpdu(out, createFpdu, "CREATE");
             Fpdu ackCreate = readFpdu(in, "ACK_CREATE");
             if (!checkDiagnostic(ackCreate, "ACK_CREATE"))
                 return;
+
+            // Read negotiated PI 25 from ACK_CREATE - THIS is the value we must use
+            int negotiatedPi25 = proposedPi25;
+            ParameterValue ackPi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+            if (ackPi25 != null && ackPi25.getValue() != null) {
+                negotiatedPi25 = parseNumeric(ackPi25.getValue());
+                System.out.println("ACK_CREATE: server negotiated PI25=" + negotiatedPi25);
+            } else {
+                System.out.println("ACK_CREATE: no PI25 in response, using proposed=" + proposedPi25);
+            }
+            int actualChunkSize = negotiatedPi25 - 6;
+            System.out.println("Using actual chunk size (PI32) = " + actualChunkSize);
 
             // 3. OPEN
             Fpdu openFpdu = new Fpdu(FpduType.OPEN).withIdDst(serverConnId);
@@ -78,11 +95,12 @@ public class CxConnectTest {
             if (!checkDiagnostic(ackWrite, "ACK_WRITE"))
                 return;
 
-            // 5. DTF - send test data
+            // 5. DTF - send test data with same transport framing as other FPDUs
             byte[] testData = "Hello from CxConnectTest - this is test data for PeSIT transfer validation!".getBytes();
             byte[] dtfBytes = FpduBuilder.buildFpdu(FpduType.DTF, serverConnId, 0, testData);
             System.out.println("Sending DTF (" + dtfBytes.length + " bytes, data=" + testData.length + " bytes)");
-            out.write(dtfBytes); // buildFpdu already includes length prefix
+            out.writeShort(dtfBytes.length); // transport framing
+            out.write(dtfBytes);
             out.flush();
 
             // 6. DTF_END
@@ -136,6 +154,8 @@ public class CxConnectTest {
     private static void sendFpdu(DataOutputStream out, Fpdu fpdu, String name) throws Exception {
         byte[] data = FpduBuilder.buildFpdu(fpdu);
         System.out.println("Sending " + name + " (" + data.length + " bytes)");
+        // Transport framing: write length prefix, then FPDU bytes (which also contain
+        // internal length)
         out.writeShort(data.length);
         out.write(data);
         out.flush();
@@ -148,6 +168,25 @@ public class CxConnectTest {
     }
 
     private static boolean checkDiagnostic(Fpdu fpdu, String name) {
+        // Check if we got ABORT instead of expected ACK
+        if (fpdu.getFpduType() == FpduType.ABORT) {
+            System.out.println("ERROR: Got ABORT instead of " + name);
+            ParameterValue diag = fpdu.getParameter(ParameterIdentifier.PI_02_DIAG);
+            if (diag != null && diag.getValue() != null) {
+                byte[] diagBytes = diag.getValue();
+                int code = diagBytes[0] & 0xFF;
+                int reason = diagBytes.length >= 3 ? ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF) : 0;
+                System.out.println("  ABORT diagnostic: D" + code + "_" + reason);
+                // Lookup in DiagnosticCode enum
+                for (DiagnosticCode dc : DiagnosticCode.values()) {
+                    if (dc.getCode() == code && dc.getReason() == reason) {
+                        System.out.println("  Message: " + dc.getMessage());
+                        break;
+                    }
+                }
+            }
+            return false;
+        }
         ParameterValue diag = fpdu.getParameter(ParameterIdentifier.PI_02_DIAG);
         if (diag != null && diag.getValue() != null && diag.getValue().length >= 1) {
             byte[] diagBytes = diag.getValue();
@@ -155,6 +194,13 @@ public class CxConnectTest {
             if (code != 0) {
                 int reason = diagBytes.length >= 3 ? ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF) : 0;
                 System.out.println("ERROR: " + name + " diagnostic D" + code + "_" + reason);
+                // Lookup in DiagnosticCode enum
+                for (DiagnosticCode dc : DiagnosticCode.values()) {
+                    if (dc.getCode() == code && dc.getReason() == reason) {
+                        System.out.println("  Message: " + dc.getMessage());
+                        break;
+                    }
+                }
                 return false;
             }
         }
