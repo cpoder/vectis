@@ -43,6 +43,7 @@ import com.pesitwizard.client.repository.TransferHistoryRepository;
 import com.pesitwizard.client.security.SecretsService;
 import com.pesitwizard.connector.ConnectorException;
 import com.pesitwizard.connector.StorageConnector;
+import com.pesitwizard.exception.PesitException;
 import com.pesitwizard.fpdu.ConnectMessageBuilder;
 import com.pesitwizard.fpdu.CreateMessageBuilder;
 import com.pesitwizard.fpdu.Fpdu;
@@ -742,12 +743,13 @@ public class TransferService {
                 }
 
                 // CREATE - use CreateMessageBuilder for correct structure
-                // Strategy: propose MAX values, server will respond with its limits in
-                // ACK_CREATE
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF; // PI_13 is 3 bytes max
-                // PI 25 (maxEntitySize) = propose max (65535) or server limit from ACONNECT
+                // PI 25 (maxEntitySize) = use server limit from ACONNECT, or config, or safe
+                // default (512)
                 // PI 32 (recordLength) = PI 25 - 6 (FPDU header)
-                int proposedMaxEntity = serverMaxEntitySize > 0 ? serverMaxEntitySize : 65535;
+                // Note: CX server only accepts PI 25 = 512, so use conservative default
+                int proposedMaxEntity = serverMaxEntitySize > 0 ? serverMaxEntitySize
+                                : (recordLength > 0 ? recordLength + 6 : 512);
                 int proposedRecordLength = proposedMaxEntity - 6;
                 // PI 42 (maxReservation) = file size in KB (with PI 41 = 0 for KB unit)
                 long fileSizeKB = (data.length + 1023) / 1024; // Round up to KB
@@ -977,12 +979,14 @@ public class TransferService {
                         log.info("ACONNECT: Server max entity size (PI 25) = {}", serverMaxEntitySize);
                 }
 
-                // CREATE - propose MAX values, server will respond with its limits in
-                // ACK_CREATE
+                // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
-                // PI 25 (maxEntitySize) = propose max (65535) or server limit from ACONNECT
+                // PI 25 (maxEntitySize) = use server limit from ACONNECT, or config, or safe
+                // default (512)
                 // PI 32 (recordLength) = PI 25 - 6 (FPDU header)
-                int proposedMaxEntity = serverMaxEntitySize > 0 ? serverMaxEntitySize : 65535;
+                // Note: CX server only accepts PI 25 = 512, so use conservative default
+                int proposedMaxEntity = serverMaxEntitySize > 0 ? serverMaxEntitySize
+                                : (recordLength > 0 ? recordLength + 6 : 512);
                 int proposedRecordLength = proposedMaxEntity - 6;
                 // PI 42 (maxReservation) = file size in KB (with PI 41 = 0 for KB unit)
                 long fileSizeKB = (fileSize + 1023) / 1024; // Round up to KB
@@ -1372,7 +1376,7 @@ public class TransferService {
          * - Files > 100MB: every 5MB
          */
         /**
-         * Check ACK FPDU diagnostic (PI 2). Throws exception if non-zero.
+         * Check ACK FPDU diagnostic (PI 2). Throws PesitException if non-zero.
          * According to PeSIT spec, diagnostic code 0 = success, any other value =
          * failure.
          */
@@ -1382,13 +1386,8 @@ public class TransferService {
                         byte[] diagBytes = diag.getValue();
                         int diagCode = diagBytes[0] & 0xFF;
                         if (diagCode != 0) {
-                                int diagReason = diagBytes.length >= 3
-                                                ? ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF)
-                                                : 0;
-                                String msg = String.format("%s failed with diagnostic D%d_%d", fpduName, diagCode,
-                                                diagReason);
-                                log.error(msg);
-                                throw new RuntimeException(msg);
+                                log.error("{} failed with diagnostic PI 2", fpduName);
+                                throw new PesitException(diag);
                         }
                 }
         }

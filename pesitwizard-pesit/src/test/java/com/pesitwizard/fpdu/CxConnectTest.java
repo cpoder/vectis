@@ -17,8 +17,148 @@ public class CxConnectTest {
     private static final String SERVEUR = "CETOM1";
 
     public static void main(String[] args) throws Exception {
-        // Test full transfer flow with CREATE
-        testFullTransfer();
+        // Test full transfer flow with CREATE and DTF
+        testFullTransferWithData();
+    }
+
+    /**
+     * Test complete transfer: CONNECT -> CREATE -> OPEN -> WRITE -> DTF -> DTF_END
+     * -> TRANS_END -> CLOSE -> DESELECT -> RELEASE
+     */
+    private static void testFullTransferWithData() {
+        System.out.println("\n=== Test: Full transfer with DTF data ===");
+
+        try (Socket socket = new Socket(HOST, PORT)) {
+            socket.setSoTimeout(10000);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+
+            // 1. CONNECT
+            Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, DEMANDEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_04_SERVEUR, SERVEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0))
+                    .withIdSrc(1)
+                    .withIdDst(0);
+            sendFpdu(out, connectFpdu, "CONNECT");
+            Fpdu aconnect = readFpdu(in, "ACONNECT");
+            if (aconnect.getFpduType() != FpduType.ACONNECT) {
+                System.out.println("ERROR: Expected ACONNECT, got " + aconnect.getFpduType());
+                return;
+            }
+            int serverConnId = aconnect.getIdSrc();
+            System.out.println("Server connection ID: " + serverConnId);
+
+            // 2. CREATE with PI 25 = 512, PI 32 = 506
+            Fpdu createFpdu = new CreateMessageBuilder()
+                    .filename("FILE")
+                    .transferId(1)
+                    .variableFormat()
+                    .recordLength(506)
+                    .maxEntitySize(512)
+                    .fileSizeKB(1)
+                    .build(serverConnId);
+            sendFpdu(out, createFpdu, "CREATE");
+            Fpdu ackCreate = readFpdu(in, "ACK_CREATE");
+            if (!checkDiagnostic(ackCreate, "ACK_CREATE"))
+                return;
+
+            // 3. OPEN
+            Fpdu openFpdu = new Fpdu(FpduType.OPEN).withIdDst(serverConnId);
+            sendFpdu(out, openFpdu, "OPEN");
+            Fpdu ackOpen = readFpdu(in, "ACK_OPEN");
+            if (!checkDiagnostic(ackOpen, "ACK_OPEN"))
+                return;
+
+            // 4. WRITE
+            Fpdu writeFpdu = new Fpdu(FpduType.WRITE).withIdDst(serverConnId);
+            sendFpdu(out, writeFpdu, "WRITE");
+            Fpdu ackWrite = readFpdu(in, "ACK_WRITE");
+            if (!checkDiagnostic(ackWrite, "ACK_WRITE"))
+                return;
+
+            // 5. DTF - send test data
+            byte[] testData = "Hello from CxConnectTest - this is test data for PeSIT transfer validation!".getBytes();
+            byte[] dtfBytes = FpduBuilder.buildFpdu(FpduType.DTF, serverConnId, 0, testData);
+            System.out.println("Sending DTF (" + dtfBytes.length + " bytes, data=" + testData.length + " bytes)");
+            out.write(dtfBytes); // buildFpdu already includes length prefix
+            out.flush();
+
+            // 6. DTF_END
+            Fpdu dtfEndFpdu = new Fpdu(FpduType.DTF_END)
+                    .withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, dtfEndFpdu, "DTF_END");
+            // No ACK for DTF_END
+
+            // 7. TRANS_END
+            Fpdu transEndFpdu = new Fpdu(FpduType.TRANS_END).withIdDst(serverConnId);
+            sendFpdu(out, transEndFpdu, "TRANS_END");
+            Fpdu ackTransEnd = readFpdu(in, "ACK_TRANS_END");
+            if (!checkDiagnostic(ackTransEnd, "ACK_TRANS_END"))
+                return;
+
+            // 8. CLOSE
+            Fpdu closeFpdu = new Fpdu(FpduType.CLOSE)
+                    .withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, closeFpdu, "CLOSE");
+            Fpdu ackClose = readFpdu(in, "ACK_CLOSE");
+            if (!checkDiagnostic(ackClose, "ACK_CLOSE"))
+                return;
+
+            // 9. DESELECT
+            Fpdu deselectFpdu = new Fpdu(FpduType.DESELECT)
+                    .withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, deselectFpdu, "DESELECT");
+            Fpdu ackDeselect = readFpdu(in, "ACK_DESELECT");
+            if (!checkDiagnostic(ackDeselect, "ACK_DESELECT"))
+                return;
+
+            // 10. RELEASE
+            Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
+                    .withIdDst(serverConnId)
+                    .withIdSrc(1)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, releaseFpdu, "RELEASE");
+            Fpdu ackRelease = readFpdu(in, "ACK_RELEASE");
+
+            System.out.println("\n✓ SUCCESS - Full transfer completed!");
+
+        } catch (Exception e) {
+            System.out.println("ERROR: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static void sendFpdu(DataOutputStream out, Fpdu fpdu, String name) throws Exception {
+        byte[] data = FpduBuilder.buildFpdu(fpdu);
+        System.out.println("Sending " + name + " (" + data.length + " bytes)");
+        out.writeShort(data.length);
+        out.write(data);
+        out.flush();
+    }
+
+    private static Fpdu readFpdu(DataInputStream in, String expectedName) throws Exception {
+        Fpdu fpdu = FpduIO.readFpdu(in);
+        System.out.println("Got: " + fpdu.getFpduType() + " (expected " + expectedName + ")");
+        return fpdu;
+    }
+
+    private static boolean checkDiagnostic(Fpdu fpdu, String name) {
+        ParameterValue diag = fpdu.getParameter(ParameterIdentifier.PI_02_DIAG);
+        if (diag != null && diag.getValue() != null && diag.getValue().length >= 1) {
+            byte[] diagBytes = diag.getValue();
+            int code = diagBytes[0] & 0xFF;
+            if (code != 0) {
+                int reason = diagBytes.length >= 3 ? ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF) : 0;
+                System.out.println("ERROR: " + name + " diagnostic D" + code + "_" + reason);
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void testFullTransfer() {
