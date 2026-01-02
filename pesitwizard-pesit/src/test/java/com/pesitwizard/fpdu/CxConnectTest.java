@@ -52,34 +52,74 @@ public class CxConnectTest {
             int serverConnId = aconnect.getIdSrc();
             System.out.println("Server connection ID: " + serverConnId);
 
-            // 2. CREATE - propose value and read server's negotiated response
-            // CX server has a limit (512), so we use that as the proposal
-            // A real client should read PI 25 from ACONNECT if present
-            int proposedPi25 = 512;
-            int proposedPi32 = proposedPi25 - 6;
-            System.out.println("CREATE: proposing PI25=" + proposedPi25 + ", PI32=" + proposedPi32);
-            Fpdu createFpdu = new CreateMessageBuilder()
-                    .filename("FILE")
-                    .transferId(1)
-                    .variableFormat()
-                    .recordLength(proposedPi32)
-                    .maxEntitySize(proposedPi25)
-                    .fileSizeKB(1)
-                    .build(serverConnId);
-            sendFpdu(out, createFpdu, "CREATE");
-            Fpdu ackCreate = readFpdu(in, "ACK_CREATE");
-            if (!checkDiagnostic(ackCreate, "ACK_CREATE"))
-                return;
-
-            // Read negotiated PI 25 from ACK_CREATE - THIS is the value we must use
+            // 2. CREATE - TRUE NEGOTIATION: propose max, reduce until accepted
+            int proposedPi25 = 65535; // Start with max possible
             int negotiatedPi25 = proposedPi25;
-            ParameterValue ackPi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
-            if (ackPi25 != null && ackPi25.getValue() != null) {
-                negotiatedPi25 = parseNumeric(ackPi25.getValue());
-                System.out.println("ACK_CREATE: server negotiated PI25=" + negotiatedPi25);
-            } else {
-                System.out.println("ACK_CREATE: no PI25 in response, using proposed=" + proposedPi25);
+            Fpdu ackCreate = null;
+            int minPi25 = 64; // Don't go below this
+
+            while (proposedPi25 >= minPi25) {
+                int proposedPi32 = proposedPi25 - 6;
+                System.out.println("CREATE: proposing PI25=" + proposedPi25 + ", PI32=" + proposedPi32);
+                Fpdu createFpdu = new CreateMessageBuilder()
+                        .filename("FILE")
+                        .transferId(1)
+                        .variableFormat()
+                        .recordLength(proposedPi32)
+                        .maxEntitySize(proposedPi25)
+                        .fileSizeKB(1)
+                        .build(serverConnId);
+                sendFpdu(out, createFpdu, "CREATE");
+                ackCreate = readFpdu(in, "ACK_CREATE");
+
+                // Check if CREATE was rejected
+                ParameterValue diagPv = ackCreate.getParameter(ParameterIdentifier.PI_02_DIAG);
+                boolean rejected = false;
+                if (diagPv != null && diagPv.getValue() != null) {
+                    byte[] diagBytes = (byte[]) diagPv.getValue();
+                    if (diagBytes.length >= 2 && (diagBytes[0] != 0 || diagBytes[1] != 0)) {
+                        rejected = true;
+                        DiagnosticCode dc = DiagnosticCode.fromParameterValue(diagPv);
+                        System.out.println("CREATE rejected: " + dc);
+
+                        // Read server's suggested PI 25
+                        ParameterValue serverPi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                        int serverValue = 0;
+                        if (serverPi25 != null && serverPi25.getValue() != null) {
+                            serverValue = parseNumeric(serverPi25.getValue());
+                            System.out.println("Server PI25 in response=" + serverValue);
+                        }
+
+                        // Try server's value if smaller, otherwise halve our proposal
+                        if (serverValue > 0 && serverValue < proposedPi25) {
+                            proposedPi25 = serverValue;
+                        } else {
+                            proposedPi25 = proposedPi25 / 2;
+                        }
+                        System.out.println("Retrying with PI25=" + proposedPi25);
+                        continue;
+                    }
+                }
+
+                if (!rejected) {
+                    // Success! Read negotiated PI 25
+                    ParameterValue ackPi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                    if (ackPi25 != null && ackPi25.getValue() != null) {
+                        negotiatedPi25 = parseNumeric(ackPi25.getValue());
+                        System.out.println("ACK_CREATE: server negotiated PI25=" + negotiatedPi25);
+                    } else {
+                        negotiatedPi25 = proposedPi25;
+                        System.out.println("ACK_CREATE: no PI25 in response, using proposed=" + proposedPi25);
+                    }
+                    break;
+                }
             }
+
+            if (proposedPi25 < minPi25) {
+                System.out.println("ERROR: Could not negotiate PI25, gave up at " + proposedPi25);
+                return;
+            }
+
             int actualChunkSize = negotiatedPi25 - 6;
             System.out.println("Using actual chunk size (PI32) = " + actualChunkSize);
 
