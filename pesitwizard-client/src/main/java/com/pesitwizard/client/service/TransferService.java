@@ -987,64 +987,57 @@ public class TransferService {
                 try (OutputStream connectorOut = connector.write(destPath, false)) {
                         boolean receiving = true;
                         while (receiving) {
-                                byte[] rawFpdu = session.receiveRawFpdu();
-                                if (rawFpdu.length >= 4) {
-                                        int phase = rawFpdu[2] & 0xFF;
-                                        int type = rawFpdu[3] & 0xFF;
+                                // Use receiveFpdu() like in working test - proper FPDU parsing
+                                Fpdu received = session.receiveFpdu();
+                                FpduType fpduType = received.getFpduType();
 
-                                        // DTF types: phase=0x00, type=0x00/0x40/0x41/0x42
-                                        if (phase == 0x00 && (type == 0x00 || type == 0x40 || type == 0x41
-                                                        || type == 0x42)) {
-                                                if (rawFpdu.length > 6) {
-                                                        int dataLen = rawFpdu.length - 6;
-                                                        connectorOut.write(rawFpdu, 6, dataLen);
-                                                        totalBytes += dataLen;
-                                                        chunkCount++;
+                                // DTF types: DTF, DTFDA, DTFMA, DTFFA
+                                if (fpduType == FpduType.DTF || fpduType == FpduType.DTFDA
+                                                || fpduType == FpduType.DTFMA || fpduType == FpduType.DTFFA) {
+                                        byte[] data = received.getData();
+                                        if (data != null && data.length > 0) {
+                                                connectorOut.write(data);
+                                                totalBytes += data.length;
+                                                chunkCount++;
 
-                                                        // Send progress update (throttled)
-                                                        long now = System.currentTimeMillis();
-                                                        if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
-                                                                progressService.sendProgress(historyId, totalBytes,
-                                                                                expectedFileSize, lastSyncPoint);
-                                                                lastProgressUpdate = now;
-                                                        }
-                                                }
-                                        } else if (phase == 0xC0 && type == 0x04) {
-                                                // SYN - parse and track sync point, send ACK_SYN
-                                                if (rawFpdu.length >= 9) {
-                                                        lastSyncPoint = rawFpdu[8] & 0xFF;
-                                                        // Send ACK_SYN
-                                                        Fpdu ackSyn = new Fpdu(FpduType.ACK_SYN)
-                                                                        .withParameter(new ParameterValue(
-                                                                                        PI_20_NUM_SYNC,
-                                                                                        lastSyncPoint))
-                                                                        .withIdDst(serverConnectionId);
-                                                        session.sendFpdu(ackSyn);
-                                                        // Update progress with sync point
+                                                // Send progress update (throttled)
+                                                long now = System.currentTimeMillis();
+                                                if (now - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL_MS) {
                                                         progressService.sendProgress(historyId, totalBytes,
                                                                         expectedFileSize, lastSyncPoint);
-                                                        lastProgressUpdate = System.currentTimeMillis();
+                                                        lastProgressUpdate = now;
                                                 }
-                                        } else if (phase == 0xC0 && type == 0x22) {
-                                                // TRANS_END from server
-                                                log.debug("Received TRANS_END from server");
-                                                receiving = false;
-                                        } else if (phase == 0xC0 && type == 0x20) {
-                                                // CLOSE - end of transfer
-                                                log.debug("Received CLOSE from server");
-                                                receiving = false;
-                                        } else if (phase == 0x00 && type == 0x03) {
-                                                // DTF.END marker (empty DTF with end flag)
-                                                log.debug("Received DTF.END marker");
-                                                receiving = false;
-                                        } else {
-                                                // Unknown FPDU - log and continue for a bit
-                                                log.warn("Unexpected FPDU during receive: phase=0x{}, type=0x{}, length={}",
-                                                                String.format("%02X", phase),
-                                                                String.format("%02X", type),
-                                                                rawFpdu.length);
-                                                // Don't exit immediately - might be an info FPDU
                                         }
+                                } else if (fpduType == FpduType.SYN) {
+                                        // SYN - parse and track sync point, send ACK_SYN
+                                        ParameterValue syncNum = received.getParameter(PI_20_NUM_SYNC);
+                                        if (syncNum != null) {
+                                                byte[] syncBytes = syncNum.getValue();
+                                                lastSyncPoint = syncBytes != null && syncBytes.length > 0
+                                                                ? (syncBytes[0] & 0xFF)
+                                                                : lastSyncPoint + 1;
+                                        } else {
+                                                lastSyncPoint++;
+                                        }
+                                        log.debug("Received SYN #{}", lastSyncPoint);
+                                        // Send ACK_SYN
+                                        Fpdu ackSyn = new Fpdu(FpduType.ACK_SYN)
+                                                        .withParameter(new ParameterValue(PI_20_NUM_SYNC,
+                                                                        lastSyncPoint))
+                                                        .withIdDst(serverConnectionId);
+                                        session.sendFpdu(ackSyn);
+                                        // Update progress with sync point
+                                        progressService.sendProgress(historyId, totalBytes,
+                                                        expectedFileSize, lastSyncPoint);
+                                        lastProgressUpdate = System.currentTimeMillis();
+                                } else if (fpduType == FpduType.TRANS_END) {
+                                        log.debug("Received TRANS_END from server");
+                                        receiving = false;
+                                } else if (fpduType == FpduType.CLOSE) {
+                                        log.debug("Received CLOSE from server - transfer complete");
+                                        receiving = false;
+                                } else {
+                                        log.warn("Unexpected FPDU during receive: {}", fpduType);
                                 }
                         }
                 }
