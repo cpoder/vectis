@@ -951,8 +951,11 @@ public class TransferService {
 
                 // Try to get file size from ACK_SELECT (PGI 40 / PI 42 = max reservation in KB)
                 long expectedFileSize = 0;
+                log.info("ACK_SELECT received: {}", ackSelect);
                 ParameterValue pgi40 = ackSelect.getParameter(ParameterGroupIdentifier.PGI_40_ATTR_PHYSIQUES);
                 if (pgi40 != null) {
+                        log.debug("PGI 40 found with {} values",
+                                        pgi40.getValues() != null ? pgi40.getValues().size() : 0);
                         for (ParameterValue pv : pgi40.getValues()) {
                                 if (pv.getParameter() == PI_42_MAX_RESERVATION) {
                                         byte[] val = pv.getValue();
@@ -962,11 +965,14 @@ public class TransferService {
                                                         sizeKb = (sizeKb << 8) | (b & 0xFF);
                                                 }
                                                 expectedFileSize = sizeKb * 1024L;
-                                                log.debug("Expected file size from PI 42: {} KB", sizeKb);
+                                                log.info("Expected file size from PI 42: {} KB = {} bytes", sizeKb,
+                                                                expectedFileSize);
                                         }
                                         break;
                                 }
                         }
+                } else {
+                        log.warn("PGI 40 not found in ACK_SELECT - progress percentage will be unknown");
                 }
 
                 // OPEN (file-level - no idSrc)
@@ -1035,6 +1041,16 @@ public class TransferService {
                                         receiving = false;
                                 } else if (fpduType == FpduType.CLOSE) {
                                         log.debug("Received CLOSE from server - transfer complete");
+                                        receiving = false;
+                                } else if (fpduType == FpduType.IDT) {
+                                        // Interrupt Data Transfer - server cancelled/interrupted
+                                        log.info("Received IDT from server - transfer interrupted");
+                                        // Send ACK_IDT
+                                        Fpdu ackIdt = new Fpdu(FpduType.ACK_IDT)
+                                                        .withParameter(new ParameterValue(PI_02_DIAG,
+                                                                        new byte[] { 0x00, 0x00, 0x00 }))
+                                                        .withIdDst(serverConnectionId);
+                                        session.sendFpdu(ackIdt);
                                         receiving = false;
                                 } else {
                                         log.warn("Unexpected FPDU during receive: {}", fpduType);
