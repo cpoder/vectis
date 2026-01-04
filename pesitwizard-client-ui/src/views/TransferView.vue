@@ -35,7 +35,13 @@ const transferring = ref(false)
 const result = ref<any>(null)
 const error = ref('')
 const currentTransferId = ref<string | null>(null)
-const progress = ref({ bytesTransferred: 0, fileSize: 0, percentage: 0 })
+const progress = ref({ 
+  bytesTransferred: 0, 
+  fileSize: 0, 
+  percentage: 0,
+  bytesTransferredFormatted: '0 B',
+  fileSizeFormatted: 'unknown'
+})
 const resumableTransfers = ref<any[]>([])
 
 // WebSocket for real-time progress updates
@@ -53,7 +59,9 @@ watch(wsProgress, (newProgress) => {
     progress.value = {
       bytesTransferred: newProgress.bytesTransferred,
       fileSize: newProgress.fileSize,
-      percentage: newProgress.percentage
+      percentage: newProgress.percentage,
+      bytesTransferredFormatted: newProgress.bytesTransferredFormatted || '0 B',
+      fileSizeFormatted: newProgress.fileSizeFormatted || 'unknown'
     }
     // Check if transfer is complete
     if (newProgress.status === 'COMPLETED' || newProgress.status === 'FAILED') {
@@ -236,7 +244,7 @@ async function startTransfer() {
   error.value = ''
   result.value = null
   currentTransferId.value = null
-  progress.value = { bytesTransferred: 0, fileSize: 0, percentage: 0 }
+  progress.value = { bytesTransferred: 0, fileSize: 0, percentage: 0, bytesTransferredFormatted: '0 B', fileSizeFormatted: 'unknown' }
 
   try {
     const endpoint = form.value.direction === 'SEND' ? '/transfers/send' : '/transfers/receive'
@@ -605,15 +613,18 @@ async function resumeTransfer(transferId: string) {
           <div v-if="transferring" class="space-y-2">
             <div class="flex justify-between text-sm text-gray-600">
               <span>Progress</span>
-              <span>{{ formatBytes(progress.bytesTransferred) }} / {{ progress.fileSize > 0 ? formatBytes(progress.fileSize) : '...' }}</span>
+              <span>{{ progress.bytesTransferredFormatted }} / {{ progress.fileSizeFormatted }}</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-3">
               <div 
                 class="bg-primary-600 h-3 rounded-full transition-all duration-300"
-                :style="{ width: progress.percentage + '%' }"
+                :style="{ width: (progress.percentage >= 0 ? progress.percentage : 0) + '%' }"
+                :class="{ 'animate-pulse': progress.percentage < 0 }"
               ></div>
             </div>
-            <p class="text-center text-sm text-gray-500">{{ progress.percentage }}%</p>
+            <p class="text-center text-sm text-gray-500">
+              {{ progress.percentage >= 0 ? progress.percentage + '%' : progress.bytesTransferredFormatted }}
+            </p>
           </div>
 
           <!-- Transfer / Cancel Buttons -->

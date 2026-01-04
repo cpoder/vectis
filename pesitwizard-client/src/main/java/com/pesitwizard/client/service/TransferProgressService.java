@@ -25,19 +25,23 @@ public class TransferProgressService {
             return;
         }
 
+        String bytesFormatted = formatBytes(bytesTransferred);
+        String sizeFormatted = fileSize > 0 ? formatBytes(fileSize) : "unknown";
         TransferProgressMessage message = new TransferProgressMessage(
                 transferId,
                 bytesTransferred,
                 fileSize,
-                fileSize > 0 ? (int) ((bytesTransferred * 100) / fileSize) : 0,
+                fileSize > 0 ? (int) ((bytesTransferred * 100) / fileSize) : -1, // -1 = unknown
                 syncPoint,
                 "IN_PROGRESS",
-                null);
+                null,
+                bytesFormatted,
+                sizeFormatted);
 
         String destination = "/topic/transfer/" + transferId + "/progress";
         messagingTemplate.convertAndSend(destination, message);
-        log.debug("WebSocket progress: {} - {}% ({}/{})",
-                transferId, message.percentage(), bytesTransferred, fileSize);
+        log.debug("WebSocket progress: {} - {} / {} ({}%)",
+                transferId, bytesFormatted, sizeFormatted, message.percentage());
     }
 
     /**
@@ -48,6 +52,8 @@ public class TransferProgressService {
             return;
         }
 
+        String bytesFormatted = formatBytes(bytesTransferred);
+        String sizeFormatted = fileSize > 0 ? formatBytes(fileSize) : bytesFormatted;
         TransferProgressMessage message = new TransferProgressMessage(
                 transferId,
                 bytesTransferred,
@@ -55,11 +61,13 @@ public class TransferProgressService {
                 100,
                 0,
                 "COMPLETED",
-                null);
+                null,
+                bytesFormatted,
+                sizeFormatted);
 
         String destination = "/topic/transfer/" + transferId + "/progress";
         messagingTemplate.convertAndSend(destination, message);
-        log.info("WebSocket: transfer {} completed ({} bytes)", transferId, bytesTransferred);
+        log.info("WebSocket: transfer {} completed ({})", transferId, bytesFormatted);
     }
 
     /**
@@ -77,11 +85,28 @@ public class TransferProgressService {
                 0,
                 0,
                 "FAILED",
-                errorMessage);
+                errorMessage,
+                "0 B",
+                "unknown");
 
         String destination = "/topic/transfer/" + transferId + "/progress";
         messagingTemplate.convertAndSend(destination, message);
         log.info("WebSocket: transfer {} failed - {}", transferId, errorMessage);
+    }
+
+    /**
+     * Format bytes to human-readable string (B, KB, MB, GB).
+     */
+    private static String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024.0);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
+        }
     }
 
     /**
@@ -94,6 +119,8 @@ public class TransferProgressService {
             int percentage,
             int lastSyncPoint,
             String status,
-            String errorMessage) {
+            String errorMessage,
+            String bytesTransferredFormatted,
+            String fileSizeFormatted) {
     }
 }

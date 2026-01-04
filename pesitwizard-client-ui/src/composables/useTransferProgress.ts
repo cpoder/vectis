@@ -10,6 +10,8 @@ export interface TransferProgress {
   lastSyncPoint: number
   status: string
   errorMessage?: string
+  bytesTransferredFormatted?: string
+  fileSizeFormatted?: string
 }
 
 export function useTransferProgress() {
@@ -79,7 +81,8 @@ export function useTransferProgress() {
       try {
         const data = JSON.parse(message.body) as TransferProgress
         progress.value = data
-        console.log('Progress update:', data.percentage + '%', data.bytesTransferred, '/', data.fileSize)
+        console.log('Progress update:', data.bytesTransferredFormatted, '/', data.fileSizeFormatted, 
+          data.percentage >= 0 ? `(${data.percentage}%)` : '')
       } catch (e) {
         console.error('Failed to parse progress message:', e)
       }
