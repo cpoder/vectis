@@ -5,7 +5,7 @@ import static com.pesitwizard.fpdu.ParameterIdentifier.*;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -273,57 +273,97 @@ public class TransferService {
         private void doReceiveFile(TransferRequest request, String historyId, PesitServer server,
                         TransferConfig config, String resolvedFilename) {
                 String destConnId = request.getDestinationConnectionId();
+                final int MAX_RESTART_ATTEMPTS = 3;
+                int restartPoint = 0;
+                long restartBytePosition = 0;
 
-                try {
-                        TransportChannel channel = createChannel(server);
+                for (int attempt = 0; attempt <= MAX_RESTART_ATTEMPTS; attempt++) {
+                        try {
+                                if (attempt > 0) {
+                                        log.info("Restart attempt {} - resuming from sync point {} at byte {}",
+                                                        attempt, restartPoint, restartBytePosition);
+                                }
 
-                        // Always use a connector - local connector if none specified
-                        StorageConnector connector = destConnId != null
-                                        ? createConnectorFromConnectionId(destConnId)
-                                        : connectorRegistry.createConnector("local", java.util.Map.of());
+                                TransportChannel channel = createChannel(server);
 
-                        long bytesReceived;
-                        try (PesitSession session = new PesitSession(channel, false)) {
-                                bytesReceived = executeReceiveTransfer(session, server, request,
-                                                connector, resolvedFilename, config, historyId);
-                        } finally {
-                                connector.close();
+                                // Always use a connector - local connector if none specified
+                                StorageConnector connector = destConnId != null
+                                                ? createConnectorFromConnectionId(destConnId)
+                                                : connectorRegistry.createConnector("local", java.util.Map.of());
+
+                                long bytesReceived;
+                                try (PesitSession session = new PesitSession(channel, false)) {
+                                        bytesReceived = executeReceiveTransfer(session, server, request,
+                                                        connector, resolvedFilename, config, historyId,
+                                                        restartPoint, restartBytePosition);
+                                } finally {
+                                        connector.close();
+                                }
+                                log.info("Wrote {} bytes to path {}", bytesReceived, resolvedFilename);
+
+                                // Update history on success
+                                historyRepository.findById(historyId).ifPresent(history -> {
+                                        history.setStatus(TransferStatus.COMPLETED);
+                                        history.setFileSize(bytesReceived);
+                                        history.setBytesTransferred(bytesReceived);
+                                        history.setCompletedAt(Instant.now());
+                                        historyRepository.save(history);
+                                });
+
+                                // Send completion via WebSocket
+                                log.info("Sending WebSocket COMPLETED for transfer {}", historyId);
+                                progressService.sendComplete(historyId, bytesReceived, bytesReceived);
+                                return; // Success - exit loop
+
+                        } catch (RestartRequiredException e) {
+                                if (attempt < MAX_RESTART_ATTEMPTS) {
+                                        restartPoint = e.getSyncPoint();
+                                        restartBytePosition = e.getBytePosition();
+                                        log.info("Restart required - will retry from sync point {} (byte {})",
+                                                        restartPoint, restartBytePosition);
+                                        // Small delay before retry
+                                        try {
+                                                Thread.sleep(1000);
+                                        } catch (InterruptedException ie) {
+                                                Thread.currentThread().interrupt();
+                                                throw new RuntimeException("Interrupted during restart delay", ie);
+                                        }
+                                } else {
+                                        log.error("Max restart attempts ({}) exceeded for transfer {}",
+                                                        MAX_RESTART_ATTEMPTS, historyId);
+                                        historyRepository.findById(historyId).ifPresent(history -> {
+                                                history.setStatus(TransferStatus.FAILED);
+                                                history.setErrorMessage(
+                                                                "Max restart attempts exceeded: " + e.getMessage());
+                                                history.setCompletedAt(Instant.now());
+                                                historyRepository.save(history);
+                                        });
+                                        progressService.sendFailed(historyId, "Max restart attempts exceeded");
+                                        return;
+                                }
+                        } catch (PesitException e) {
+                                log.error("Receive transfer {} failed with PeSIT error: {} ({})",
+                                                historyId, e.getMessage(), e.getDiagnosticCodeHex(), e);
+                                historyRepository.findById(historyId).ifPresent(history -> {
+                                        history.setStatus(TransferStatus.FAILED);
+                                        history.setErrorMessage(e.getMessage());
+                                        history.setDiagnosticCode(e.getDiagnosticCodeHex());
+                                        history.setCompletedAt(Instant.now());
+                                        historyRepository.save(history);
+                                });
+                                progressService.sendFailed(historyId, e.getMessage());
+                                return;
+                        } catch (Exception e) {
+                                log.error("Receive transfer {} failed: {}", historyId, e.getMessage(), e);
+                                historyRepository.findById(historyId).ifPresent(history -> {
+                                        history.setStatus(TransferStatus.FAILED);
+                                        history.setErrorMessage(e.getMessage());
+                                        history.setCompletedAt(Instant.now());
+                                        historyRepository.save(history);
+                                });
+                                progressService.sendFailed(historyId, e.getMessage());
+                                return;
                         }
-                        log.info("Wrote {} bytes to path {}", bytesReceived, resolvedFilename);
-
-                        // Update history on success
-                        historyRepository.findById(historyId).ifPresent(history -> {
-                                history.setStatus(TransferStatus.COMPLETED);
-                                history.setFileSize(bytesReceived);
-                                history.setBytesTransferred(bytesReceived);
-                                history.setCompletedAt(Instant.now());
-                                historyRepository.save(history);
-                        });
-
-                        // Send completion via WebSocket
-                        log.info("Sending WebSocket COMPLETED for transfer {}", historyId);
-                        progressService.sendComplete(historyId, bytesReceived, bytesReceived);
-
-                } catch (PesitException e) {
-                        log.error("Receive transfer {} failed with PeSIT error: {} ({})",
-                                        historyId, e.getMessage(), e.getDiagnosticCodeHex(), e);
-                        historyRepository.findById(historyId).ifPresent(history -> {
-                                history.setStatus(TransferStatus.FAILED);
-                                history.setErrorMessage(e.getMessage());
-                                history.setDiagnosticCode(e.getDiagnosticCodeHex());
-                                history.setCompletedAt(Instant.now());
-                                historyRepository.save(history);
-                        });
-                        progressService.sendFailed(historyId, e.getMessage());
-                } catch (Exception e) {
-                        log.error("Receive transfer {} failed: {}", historyId, e.getMessage(), e);
-                        historyRepository.findById(historyId).ifPresent(history -> {
-                                history.setStatus(TransferStatus.FAILED);
-                                history.setErrorMessage(e.getMessage());
-                                history.setCompletedAt(Instant.now());
-                                historyRepository.save(history);
-                        });
-                        progressService.sendFailed(historyId, e.getMessage());
                 }
         }
 
@@ -919,8 +959,8 @@ public class TransferService {
 
         private long executeReceiveTransfer(PesitSession session, PesitServer server,
                         TransferRequest request, StorageConnector connector, String destPath, TransferConfig config,
-                        String historyId)
-                        throws IOException, InterruptedException, ConnectorException {
+                        String historyId, int restartPoint, long restartBytePosition)
+                        throws IOException, InterruptedException, ConnectorException, RestartRequiredException {
                 int connectionId = 1;
                 int chunkSize = config.getChunkSize();
                 String remoteFilename = request.getRemoteFilename();
@@ -997,20 +1037,33 @@ public class TransferService {
                 // OPEN (file-level - no idSrc)
                 session.sendFpduWithAck(new Fpdu(FpduType.OPEN).withIdDst(serverConnectionId));
 
-                // READ (file-level - no idSrc)
+                // READ with restart point (PI 18)
+                if (restartPoint > 0) {
+                        log.info("Sending READ with restart point {} (resuming from byte {})", restartPoint,
+                                        restartBytePosition);
+                }
                 session.sendFpduWithAck(new Fpdu(FpduType.READ)
                                 .withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_18_POINT_RELANCE, 0)));
+                                .withParameter(new ParameterValue(PI_18_POINT_RELANCE, restartPoint)));
 
                 // Receive DTF chunks and write to connector
-                long totalBytes = 0;
+                long totalBytes = restartBytePosition; // Start from restart position
                 int chunkCount = 0;
-                int lastSyncPoint = 0;
+                int lastSyncPoint = restartPoint;
+                long lastSyncPointBytePosition = restartBytePosition;
                 long lastProgressUpdate = System.currentTimeMillis();
                 final long PROGRESS_UPDATE_INTERVAL_MS = 100; // Update progress every 100ms max
                 boolean interrupted = false; // Track if transfer was interrupted by server
+                int restartEndCode = 0; // PI 19 value if restart needed
 
-                try (OutputStream connectorOut = connector.write(destPath, false)) {
+                // When restarting, we need to seek to the restart position in the output file
+                // Use RandomAccessFile for seeking capability
+                try (RandomAccessFile raf = new RandomAccessFile(destPath, "rw")) {
+                        if (restartBytePosition > 0) {
+                                log.info("Seeking to byte position {} for restart", restartBytePosition);
+                                raf.seek(restartBytePosition);
+                                raf.setLength(restartBytePosition); // Truncate any data after restart point
+                        }
                         boolean receiving = true;
                         while (receiving) {
                                 // Use receiveFpdu() like in working test - proper FPDU parsing
@@ -1022,7 +1075,7 @@ public class TransferService {
                                                 || fpduType == FpduType.DTFMA || fpduType == FpduType.DTFFA) {
                                         byte[] data = received.getData();
                                         if (data != null && data.length > 0) {
-                                                connectorOut.write(data);
+                                                raf.write(data);
                                                 totalBytes += data.length;
                                                 chunkCount++;
 
@@ -1045,7 +1098,10 @@ public class TransferService {
                                         } else {
                                                 lastSyncPoint++;
                                         }
-                                        log.debug("Received SYN #{}", lastSyncPoint);
+                                        // Track byte position at this sync point BEFORE sending ACK
+                                        lastSyncPointBytePosition = totalBytes;
+                                        log.debug("Received SYN #{} at byte position {}", lastSyncPoint,
+                                                        lastSyncPointBytePosition);
                                         // Send ACK_SYN
                                         Fpdu ackSyn = new Fpdu(FpduType.ACK_SYN)
                                                         .withParameter(new ParameterValue(PI_20_NUM_SYNC,
@@ -1076,7 +1132,8 @@ public class TransferService {
                                                 case 16 -> "client cancellation";
                                                 default -> "unknown (" + endCode + ")";
                                         };
-                                        log.info("Received IDT from server - {} (PI 19={})", reason, endCode);
+                                        log.info("Received IDT from server - {} (PI 19={}) at sync point {} (byte {})",
+                                                        reason, endCode, lastSyncPoint, lastSyncPointBytePosition);
                                         // Send ACK_IDT
                                         Fpdu ackIdt = new Fpdu(FpduType.ACK_IDT)
                                                         .withParameter(new ParameterValue(PI_02_DIAG,
@@ -1084,6 +1141,7 @@ public class TransferService {
                                                         .withIdDst(serverConnectionId);
                                         session.sendFpdu(ackIdt);
                                         interrupted = true; // Don't send cleanup commands after IDT
+                                        restartEndCode = endCode; // Store for restart decision
                                         receiving = false;
                                 } else {
                                         log.warn("Unexpected FPDU during receive: {}", fpduType);
@@ -1109,9 +1167,15 @@ public class TransferService {
                                         new Fpdu(FpduType.RELEASE).withIdDst(serverConnectionId).withIdSrc(connectionId)
                                                         .withParameter(new ParameterValue(PI_02_DIAG,
                                                                         new byte[] { 0x00, 0x00, 0x00 })));
+                } else if (restartEndCode == 4 && lastSyncPoint > 0) {
+                        // PI 19 = 4: error, restart should follow - throw special exception
+                        log.info("Transfer needs restart from sync point {} (byte position {})",
+                                        lastSyncPoint, lastSyncPointBytePosition);
+                        throw new RestartRequiredException(lastSyncPoint, lastSyncPointBytePosition, totalBytes);
                 } else {
-                        log.info("Transfer interrupted by server - skipping cleanup commands");
-                        throw new IOException("Transfer interrupted by server (IDT received)");
+                        log.info("Transfer interrupted by server (PI 19={}) - cannot restart", restartEndCode);
+                        throw new IOException(
+                                        "Transfer interrupted by server (IDT received, PI 19=" + restartEndCode + ")");
                 }
 
                 return totalBytes;
