@@ -5,6 +5,7 @@ import static com.pesitwizard.fpdu.ParameterIdentifier.*;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1056,14 +1057,23 @@ public class TransferService {
                 boolean interrupted = false; // Track if transfer was interrupted by server
                 int restartEndCode = 0; // PI 19 value if restart needed
 
-                // When restarting, we need to seek to the restart position in the output file
-                // Use RandomAccessFile for seeking capability
-                try (RandomAccessFile raf = new RandomAccessFile(destPath, "rw")) {
+                // For restart, we need to seek to the restart position
+                // Use RandomAccessFile for local files when restarting, otherwise use connector
+                OutputStream outputStream = null;
+                RandomAccessFile raf = null;
+
+                try {
                         if (restartBytePosition > 0) {
+                                // Restart mode - need seek capability (only works for local files)
                                 log.info("Seeking to byte position {} for restart", restartBytePosition);
+                                raf = new RandomAccessFile(destPath, "rw");
                                 raf.seek(restartBytePosition);
                                 raf.setLength(restartBytePosition); // Truncate any data after restart point
+                        } else {
+                                // Normal mode - use connector (supports all storage types)
+                                outputStream = connector.write(destPath, false);
                         }
+
                         boolean receiving = true;
                         while (receiving) {
                                 // Use receiveFpdu() like in working test - proper FPDU parsing
@@ -1075,7 +1085,11 @@ public class TransferService {
                                                 || fpduType == FpduType.DTFMA || fpduType == FpduType.DTFFA) {
                                         byte[] data = received.getData();
                                         if (data != null && data.length > 0) {
-                                                raf.write(data);
+                                                if (raf != null) {
+                                                        raf.write(data);
+                                                } else {
+                                                        outputStream.write(data);
+                                                }
                                                 totalBytes += data.length;
                                                 chunkCount++;
 
@@ -1146,6 +1160,14 @@ public class TransferService {
                                 } else {
                                         log.warn("Unexpected FPDU during receive: {}", fpduType);
                                 }
+                        }
+                } finally {
+                        // Close resources
+                        if (raf != null) {
+                                raf.close();
+                        }
+                        if (outputStream != null) {
+                                outputStream.close();
                         }
                 }
                 // Final progress update
