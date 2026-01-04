@@ -229,20 +229,11 @@ public class TransferService {
                 String correlationId = request.getCorrelationId() != null ? request.getCorrelationId()
                                 : UUID.randomUUID().toString();
 
-                return Observation.createNotStarted("pesit.receive", observationRegistry)
-                                .lowCardinalityKeyValue("pesit.direction", "RECEIVE")
-                                .highCardinalityKeyValue("pesit.server", request.getServer())
-                                .highCardinalityKeyValue("correlation.id", correlationId)
-                                .observe(() -> doReceiveFile(request, correlationId));
-        }
-
-        private TransferResponse doReceiveFile(TransferRequest request, String correlationId) {
                 PesitServer server = resolveServer(request.getServer());
                 TransferConfig config = resolveConfig(request.getTransferConfig());
 
-                // Use filename if provided, fallback to deprecated localPath for compatibility
+                // Use filename if provided
                 String filename = request.getFilename() != null ? request.getFilename() : request.getFilename();
-                String destConnId = request.getDestinationConnectionId();
 
                 // Resolve placeholders in filename
                 String resolvedFilename = placeholderService.resolvePath(
@@ -255,14 +246,35 @@ public class TransferService {
                                                 .direction("RECEIVE")
                                                 .build());
 
+                // Create history record and return immediately
                 TransferHistory history = createHistory(server, config, TransferDirection.RECEIVE,
                                 resolvedFilename, request.getRemoteFilename(), request.getPartnerId(),
                                 correlationId);
+                history.setStatus(TransferStatus.IN_PROGRESS);
+                history.setBytesTransferred(0L);
+                history = historyRepository.save(history);
+
+                // Execute transfer asynchronously
+                doReceiveFileAsync(request, history.getId(), server, config, resolvedFilename, correlationId);
+
+                return mapToResponse(history);
+        }
+
+        @Async("transferExecutor")
+        public void doReceiveFileAsync(TransferRequest request, String historyId, PesitServer server,
+                        TransferConfig config, String resolvedFilename, String correlationId) {
+                Observation.createNotStarted("pesit.receive", observationRegistry)
+                                .lowCardinalityKeyValue("pesit.direction", "RECEIVE")
+                                .highCardinalityKeyValue("pesit.server", request.getServer())
+                                .highCardinalityKeyValue("correlation.id", correlationId)
+                                .observe(() -> doReceiveFile(request, historyId, server, config, resolvedFilename));
+        }
+
+        private void doReceiveFile(TransferRequest request, String historyId, PesitServer server,
+                        TransferConfig config, String resolvedFilename) {
+                String destConnId = request.getDestinationConnectionId();
 
                 try {
-                        history.setStatus(TransferStatus.IN_PROGRESS);
-                        history = historyRepository.save(history);
-
                         TransportChannel channel = createChannel(server);
 
                         // Always use a connector - local connector if none specified
@@ -273,39 +285,46 @@ public class TransferService {
                         long bytesReceived;
                         try (PesitSession session = new PesitSession(channel, false)) {
                                 bytesReceived = executeReceiveTransfer(session, server, request,
-                                                connector, resolvedFilename, config, history.getId());
+                                                connector, resolvedFilename, config, historyId);
                         } finally {
                                 connector.close();
                         }
                         log.info("Wrote {} bytes to path {}", bytesReceived, resolvedFilename);
 
-                        history.setStatus(TransferStatus.COMPLETED);
-                        history.setFileSize(bytesReceived);
-                        history.setBytesTransferred(bytesReceived);
-                        history.setCompletedAt(Instant.now());
+                        // Update history on success
+                        historyRepository.findById(historyId).ifPresent(history -> {
+                                history.setStatus(TransferStatus.COMPLETED);
+                                history.setFileSize(bytesReceived);
+                                history.setBytesTransferred(bytesReceived);
+                                history.setCompletedAt(Instant.now());
+                                historyRepository.save(history);
+                        });
+
+                        // Send completion via WebSocket
+                        log.info("Sending WebSocket COMPLETED for transfer {}", historyId);
+                        progressService.sendComplete(historyId, bytesReceived, bytesReceived);
 
                 } catch (PesitException e) {
-                        history.setStatus(TransferStatus.FAILED);
-                        history.setErrorMessage(e.getMessage());
-                        history.setDiagnosticCode(e.getDiagnosticCodeHex());
-                        history.setCompletedAt(Instant.now());
-                        if (e.isRestartNotSupported()) {
-                                log.warn("Receive transfer failed - restart not supported: {}", e.getMessage());
-                        } else {
-                                log.error("Receive transfer failed with PeSIT error: {} ({})",
-                                                e.getMessage(), e.getDiagnosticCodeHex(), e);
-                        }
-                        progressService.sendFailed(history.getId(), e.getMessage());
+                        log.error("Receive transfer {} failed with PeSIT error: {} ({})",
+                                        historyId, e.getMessage(), e.getDiagnosticCodeHex(), e);
+                        historyRepository.findById(historyId).ifPresent(history -> {
+                                history.setStatus(TransferStatus.FAILED);
+                                history.setErrorMessage(e.getMessage());
+                                history.setDiagnosticCode(e.getDiagnosticCodeHex());
+                                history.setCompletedAt(Instant.now());
+                                historyRepository.save(history);
+                        });
+                        progressService.sendFailed(historyId, e.getMessage());
                 } catch (Exception e) {
-                        history.setStatus(TransferStatus.FAILED);
-                        history.setErrorMessage(e.getMessage());
-                        history.setCompletedAt(Instant.now());
-                        log.error("Receive transfer failed: {}", e.getMessage(), e);
-                        progressService.sendFailed(history.getId(), e.getMessage());
+                        log.error("Receive transfer {} failed: {}", historyId, e.getMessage(), e);
+                        historyRepository.findById(historyId).ifPresent(history -> {
+                                history.setStatus(TransferStatus.FAILED);
+                                history.setErrorMessage(e.getMessage());
+                                history.setCompletedAt(Instant.now());
+                                historyRepository.save(history);
+                        });
+                        progressService.sendFailed(historyId, e.getMessage());
                 }
-
-                history = historyRepository.save(history);
-                return mapToResponse(history);
         }
 
         @Transactional

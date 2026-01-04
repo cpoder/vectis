@@ -39,9 +39,9 @@ public class TransferProgressService {
                 sizeFormatted);
 
         String destination = "/topic/transfer/" + transferId + "/progress";
+        log.info("Sending WebSocket progress to {}: {} / {} ({}%)",
+                destination, bytesFormatted, sizeFormatted, message.percentage());
         messagingTemplate.convertAndSend(destination, message);
-        log.debug("WebSocket progress: {} - {} / {} ({}%)",
-                transferId, bytesFormatted, sizeFormatted, message.percentage());
     }
 
     /**
