@@ -28,9 +28,8 @@ export function useTransferProgress() {
       return
     }
 
-    // Use native WebSocket with SockJS fallback URL format
-    // Spring's SockJS endpoint supports raw WebSocket at /ws/websocket
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/websocket`
+    // Use native WebSocket endpoint (not SockJS)
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws-raw`
     
     console.log('[WS] Connecting to:', wsUrl)
     

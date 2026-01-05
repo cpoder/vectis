@@ -26,6 +26,11 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      '/ws-raw': {
+        target: 'http://localhost:9081',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })
