@@ -1129,6 +1129,10 @@ public class TransferService {
                                         progressService.sendProgress(historyId, totalBytes,
                                                         expectedFileSize, lastSyncPoint);
                                         lastProgressUpdate = System.currentTimeMillis();
+                                } else if (fpduType == FpduType.DTF_END) {
+                                        // End of data transfer - no ACK needed per PeSIT spec 4.4.21
+                                        log.info("Received DTF_END - data transfer complete ({} bytes)", totalBytes);
+                                        receiving = false;
                                 } else if (fpduType == FpduType.TRANS_END) {
                                         log.debug("Received TRANS_END from server");
                                         receiving = false;

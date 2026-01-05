@@ -95,17 +95,24 @@ public class ReceiveFileTest {
 
             while (true) {
                 Fpdu fpdu = session.receiveFpdu();
-                if (fpdu.getFpduType() == FpduType.DTF) {
+                FpduType type = fpdu.getFpduType();
+                // Handle all DTF variants: DTF, DTFDA, DTFMA, DTFFA
+                if (type == FpduType.DTF || type == FpduType.DTFDA
+                        || type == FpduType.DTFMA || type == FpduType.DTFFA) {
                     byte[] data = fpdu.getData();
                     if (data != null && data.length > 0) {
                         dataBuffer.write(data);
                         dtfCount++;
+                        if (dtfCount % 1000 == 0) {
+                            System.out.println("  ... received " + dtfCount + " chunks, "
+                                    + dataBuffer.size() + " bytes");
+                        }
                     }
-                } else if (fpdu.getFpduType() == FpduType.DTF_END) {
+                } else if (type == FpduType.DTF_END) {
                     System.out.println("  ✓ Received DTF.END after " + dtfCount + " DTF packets");
                     break;
                 } else {
-                    System.out.println("  Unexpected FPDU: " + fpdu.getFpduType());
+                    System.out.println("  Unexpected FPDU: " + type);
                     break;
                 }
             }
