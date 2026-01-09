@@ -57,8 +57,8 @@ public class SendFileMultiDtfTest {
         System.out.println("Test data: " + testData.length + " bytes, MD5: " + md5Before);
 
         try (PesitSession session = new PesitSession(new TcpTransportChannel(TEST_HOST, TEST_PORT))) {
-            int serverConnId = performHandshake(session, "SMALL_TEST", 4096, 506);
-            sendDataWithDtf(session, serverConnId, testData);
+            int serverConnId = performHandshake(session, "FILE", 4096, 506, testData.length);
+            sendDataWithDtf(session, serverConnId, testData, 506);
             performCleanup(session, serverConnId);
         }
 
@@ -76,8 +76,8 @@ public class SendFileMultiDtfTest {
         System.out.println("Test data: " + testData.length + " bytes, MD5: " + md5Before);
 
         try (PesitSession session = new PesitSession(new TcpTransportChannel(TEST_HOST, TEST_PORT))) {
-            int serverConnId = performHandshake(session, "MEDIUM_TEST", 4096, 506);
-            int dtfCount = sendDataWithDtf(session, serverConnId, testData);
+            int serverConnId = performHandshake(session, "FILE", 4096, 506, testData.length);
+            int dtfCount = sendDataWithDtf(session, serverConnId, testData, 506);
             performCleanup(session, serverConnId);
 
             System.out.println("  Total DTFs sent: " + dtfCount);
@@ -99,8 +99,8 @@ public class SendFileMultiDtfTest {
 
         try (PesitSession session = new PesitSession(new TcpTransportChannel(TEST_HOST, TEST_PORT))) {
             // Request small entity size
-            int serverConnId = performHandshake(session, "SMALL_ENTITY", 512, 256);
-            int dtfCount = sendDataWithDtf(session, serverConnId, testData);
+            int serverConnId = performHandshake(session, "FILE", 512, 256, testData.length);
+            int dtfCount = sendDataWithDtf(session, serverConnId, testData, 256);
             performCleanup(session, serverConnId);
 
             System.out.println("  Total DTFs sent: " + dtfCount);
@@ -120,8 +120,8 @@ public class SendFileMultiDtfTest {
         System.out.println("Test data: " + testData.length + " bytes, MD5: " + md5Before);
 
         try (PesitSession session = new PesitSession(new TcpTransportChannel(TEST_HOST, TEST_PORT))) {
-            int serverConnId = performHandshake(session, "LARGE_TEST", 4096, 1024);
-            int dtfCount = sendDataWithDtf(session, serverConnId, testData);
+            int serverConnId = performHandshake(session, "FILE", 4096, 1024, testData.length);
+            int dtfCount = sendDataWithDtf(session, serverConnId, testData, 1024);
             performCleanup(session, serverConnId);
 
             System.out.println("  Total DTFs sent: " + dtfCount);
@@ -136,9 +136,11 @@ public class SendFileMultiDtfTest {
      * 
      * @return serverConnectionId
      */
-    private int performHandshake(PesitSession session, String filename, int maxEntitySize, int recordLength)
+    private static final int CLIENT_CONNECTION_ID = 0x05;
+
+    private int performHandshake(PesitSession session, String filename, int maxEntitySize, int recordLength,
+            int fileSize)
             throws IOException, InterruptedException {
-        int clientConnectionId = 0x05;
 
         // CONNECT
         System.out.println("Step 1: CONNECT");
@@ -146,7 +148,7 @@ public class SendFileMultiDtfTest {
                 .demandeur("LOOP")
                 .serveur(SERVER_ID)
                 .writeAccess();
-        Fpdu aconnect = session.sendFpduWithAck(connectBuilder.build(clientConnectionId));
+        Fpdu aconnect = session.sendFpduWithAck(connectBuilder.build(CLIENT_CONNECTION_ID));
         assertEquals(FpduType.ACONNECT, aconnect.getFpduType());
         int serverConnectionId = aconnect.getIdSrc();
         System.out.println("  ✓ Connected, server ID: " + serverConnectionId);
@@ -160,14 +162,17 @@ public class SendFileMultiDtfTest {
             maxEntitySize = Math.min(maxEntitySize, serverMaxEntity);
         }
 
-        // CREATE
-        System.out.println("Step 2: CREATE (requesting PI_25=" + maxEntitySize + ", PI_32=" + recordLength + ")");
+        // CREATE - must declare file size per PeSIT spec
+        long fileSizeKB = (fileSize + 1023) / 1024; // Round up to KB
+        System.out.println("Step 2: CREATE (PI_25=" + maxEntitySize + ", PI_32=" + recordLength + ", fileSize="
+                + fileSize + " bytes / " + fileSizeKB + " KB)");
         CreateMessageBuilder createBuilder = new CreateMessageBuilder()
                 .filename(filename)
                 .transferId(1)
                 .variableFormat()
                 .recordLength(recordLength)
-                .maxEntitySize(maxEntitySize);
+                .maxEntitySize(maxEntitySize)
+                .fileSizeKB(fileSizeKB);
         Fpdu ackCreate = session.sendFpduWithAck(createBuilder.build(serverConnectionId));
         assertEquals(FpduType.ACK_CREATE, ackCreate.getFpduType());
 
@@ -196,15 +201,17 @@ public class SendFileMultiDtfTest {
     }
 
     /**
-     * Send data as DTF FPDUs, respecting chunk size limits.
+     * Send data as DTF FPDUs, respecting record length (PI_32).
+     * Per PeSIT spec: article size must not exceed PI_32 (recordLength).
      * 
      * @return number of DTF FPDUs sent
      */
-    private int sendDataWithDtf(PesitSession session, int serverConnectionId, byte[] data)
+    private int sendDataWithDtf(PesitSession session, int serverConnectionId, byte[] data, int recordLength)
             throws IOException, InterruptedException {
-        System.out.println("Step 5: Sending " + data.length + " bytes as DTF chunks");
+        System.out
+                .println("Step 5: Sending " + data.length + " bytes as DTF chunks (recordLength=" + recordLength + ")");
 
-        int chunkSize = 4090; // Default max data per DTF (4096 - 6 header)
+        int chunkSize = recordLength; // PI_32 = max article size
         int dtfCount = 0;
         int offset = 0;
 
@@ -245,10 +252,11 @@ public class SendFileMultiDtfTest {
 
     /**
      * Perform cleanup: CLOSE -> DESELECT -> RELEASE
+     * Per PeSIT spec 4.4.26: RELEASE requires both ID.DST and ID.SRC
      */
     private void performCleanup(PesitSession session, int serverConnectionId)
             throws IOException, InterruptedException {
-        // CLOSE
+        // CLOSE - Per PeSIT spec 4.4.12: only ID.DST required
         System.out.println("Step 8: CLOSE");
         Fpdu closeFpdu = new Fpdu(FpduType.CLOSE)
                 .withIdDst(serverConnectionId)
@@ -257,7 +265,7 @@ public class SendFileMultiDtfTest {
         assertEquals(FpduType.ACK_CLOSE, ackClose.getFpduType());
         System.out.println("  ✓ File closed");
 
-        // DESELECT
+        // DESELECT - Per PeSIT spec 4.4.8: only ID.DST required
         System.out.println("Step 9: DESELECT");
         Fpdu deselectFpdu = new Fpdu(FpduType.DESELECT)
                 .withIdDst(serverConnectionId)
@@ -266,10 +274,11 @@ public class SendFileMultiDtfTest {
         assertEquals(FpduType.ACK_DESELECT, ackDeselect.getFpduType());
         System.out.println("  ✓ File deselected");
 
-        // RELEASE
+        // RELEASE - Per PeSIT spec 4.4.26: requires ID.DST and ID.SRC
         System.out.println("Step 10: RELEASE");
         Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
                 .withIdDst(serverConnectionId)
+                .withIdSrc(CLIENT_CONNECTION_ID)
                 .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
         Fpdu relconf = session.sendFpduWithAck(releaseFpdu);
         assertEquals(FpduType.RELCONF, relconf.getFpduType());
