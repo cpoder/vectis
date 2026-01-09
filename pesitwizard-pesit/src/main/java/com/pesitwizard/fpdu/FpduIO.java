@@ -124,9 +124,9 @@ public class FpduIO {
 
     /**
      * Extract data payload from a DTF FPDU.
-     * DTF header is 6 bytes: 2 (internal length) + 2 (ids) + 2 (phase/type).
+     * DTF header is 6 bytes: len(2) + phase(1) + type(1) + idDst(1) + idSrc(1).
      * 
-     * @param rawData Raw DTF FPDU bytes
+     * @param rawData Raw DTF FPDU bytes (with length header)
      * @return Data payload, or empty array if no data
      */
     public static byte[] extractDtfData(byte[] rawData) {

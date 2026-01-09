@@ -28,7 +28,7 @@ public class CreateMessageBuilderTest {
         assertNotNull(fpdu);
         assertTrue(fpduBytes.length > 6, "FPDU should have header (6 bytes) + parameters");
 
-        // Parse header
+        // Parse FPDU (includes length header)
         FpduParser parser = new FpduParser(fpduBytes);
         Fpdu fpduObj = parser.parse();
         assertEquals(FpduType.CREATE, fpduObj.getFpduType());
@@ -85,7 +85,7 @@ public class CreateMessageBuilderTest {
         assertNotNull(fpdu);
         assertTrue(fpduBytes.length > 50, "FPDU with all parameters should be substantial");
 
-        // Verify header
+        // Verify header (includes length header)
         FpduParser parser = new FpduParser(fpduBytes);
         Fpdu fpduObj = parser.parse();
         assertEquals(FpduType.CREATE, fpduObj.getFpduType(), "FPDU type should be CREATE");

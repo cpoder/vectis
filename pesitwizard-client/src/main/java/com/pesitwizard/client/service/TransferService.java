@@ -38,6 +38,7 @@ import com.pesitwizard.client.entity.TransferConfig;
 import com.pesitwizard.client.entity.TransferHistory;
 import com.pesitwizard.client.entity.TransferHistory.TransferDirection;
 import com.pesitwizard.client.entity.TransferHistory.TransferStatus;
+import com.pesitwizard.client.pesit.FpduReader;
 import com.pesitwizard.client.repository.StorageConnectionRepository;
 import com.pesitwizard.client.repository.TransferConfigRepository;
 import com.pesitwizard.client.repository.TransferHistoryRepository;
@@ -1077,10 +1078,11 @@ public class TransferService {
                                 outputStream = connector.write(destPath, false);
                         }
 
+                        FpduReader fpduReader = new FpduReader(session);
                         boolean receiving = true;
                         while (receiving) {
-                                // Use receiveFpdu() like in working test - proper FPDU parsing
-                                Fpdu received = session.receiveFpdu();
+                                // Use FpduReader to handle concatenated FPDUs (PeSIT section 4.5)
+                                Fpdu received = fpduReader.read();
                                 FpduType fpduType = received.getFpduType();
 
                                 // DTF types: DTF, DTFDA, DTFMA, DTFFA

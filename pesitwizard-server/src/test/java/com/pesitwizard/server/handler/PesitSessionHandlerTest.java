@@ -289,7 +289,8 @@ class PesitSessionHandlerTest {
         SessionContext ctx = handler.createSession("192.168.1.100");
         byte[] invalidData = new byte[] { 0x00, 0x01, 0x02 }; // Too short to be valid
 
-        assertThrows(IllegalArgumentException.class,
+        // BufferUnderflowException when FPDU is too short to parse
+        assertThrows(java.nio.BufferUnderflowException.class,
                 () -> handler.processIncomingFpdu(ctx, invalidData, null));
     }
 
