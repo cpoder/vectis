@@ -116,6 +116,14 @@ public class PesitSession implements AutoCloseable {
         channel.send(fpduBytes);
     }
 
+    /**
+     * Send raw FPDU bytes directly (already built by FpduBuilder).
+     * Used for multi-article DTF where the caller builds the complete FPDU.
+     */
+    public void sendRawFpdu(byte[] fpduBytes) throws IOException {
+        channel.send(fpduBytes);
+    }
+
     public Fpdu sendFpduWithDataAndAck(Fpdu fpdu, byte[] data)
             throws IOException, InterruptedException {
         sendFpduWithData(fpdu, data);

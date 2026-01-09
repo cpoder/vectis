@@ -39,6 +39,7 @@ import com.pesitwizard.client.entity.TransferHistory;
 import com.pesitwizard.client.entity.TransferHistory.TransferDirection;
 import com.pesitwizard.client.entity.TransferHistory.TransferStatus;
 import com.pesitwizard.client.pesit.FpduReader;
+import com.pesitwizard.client.pesit.FpduWriter;
 import com.pesitwizard.client.repository.StorageConnectionRepository;
 import com.pesitwizard.client.repository.TransferConfigRepository;
 import com.pesitwizard.client.repository.TransferHistoryRepository;
@@ -877,7 +878,7 @@ public class TransferService {
                         log.info("Streaming ACK_WRITE: Restart point = {}", restartPoint);
                 }
 
-                // DTF - stream data in chunks from InputStream
+                // DTF - stream data using FpduWriter (respects PI_25 entity size)
                 long totalSent = 0;
                 long bytesSinceLastSync = 0;
                 int syncPointNumber = 0;
@@ -890,7 +891,16 @@ public class TransferService {
                 log.info("Sync interval: {} bytes (negotiated={}KB, syncEnabled={})",
                                 syncIntervalBytes, negotiatedSyncIntervalKb, syncPointsEnabled);
 
-                byte[] buffer = new byte[actualChunkSizeStreaming];
+                // Create FpduWriter with negotiated entity size (PI_25)
+                int negotiatedEntitySize = negotiatedStreaming.negotiatedPi25();
+                FpduWriter fpduWriter = new FpduWriter(session, serverConnectionId, negotiatedEntitySize,
+                                actualChunkSizeStreaming, false);
+                log.info("FpduWriter created: maxEntitySize={}, maxDataPerDtf={}",
+                                negotiatedEntitySize, fpduWriter.getMaxDataPerDtf());
+
+                // Read in optimal chunk sizes based on entity limit
+                int readBufferSize = Math.min(actualChunkSizeStreaming, fpduWriter.getMaxDataPerDtf());
+                byte[] buffer = new byte[readBufferSize];
                 int bytesRead;
 
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
@@ -902,10 +912,9 @@ public class TransferService {
 
                         byte[] chunk = bytesRead == buffer.length ? buffer : java.util.Arrays.copyOf(buffer, bytesRead);
 
-                        Fpdu dtfFpdu = new Fpdu(FpduType.DTF)
-                                        .withIdDst(serverConnectionId);
-                        session.sendFpduWithData(dtfFpdu, chunk);
-                        totalSent += bytesRead;
+                        // FpduWriter handles chunking if data exceeds entity size
+                        fpduWriter.writeDtf(chunk);
+                        totalSent = fpduWriter.getTotalBytesSent();
                         bytesSinceLastSync += bytesRead;
                         bytesSinceLastProgressUpdate += bytesRead;
                         log.debug("Sent DTF chunk: {} bytes, total sent: {}/{}", bytesRead, totalSent, fileSize);
